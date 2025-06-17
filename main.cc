@@ -9,6 +9,10 @@
 namespace base {
 class WebHandler : public base::HttpRequestHandler {
   void OnHttpRequest(const HttpRequest& req) {
+    if (req.is_websocket_handshake) {
+      req.conn->UpgradeToWebsocket(req);
+      return;
+    }
     LogI("method: %s \nuri: %s \n%s", req.method.ToStr().c_str(),
          req.uri.ToStr().c_str(), req.body.ToStr().c_str());
     static int i = 0;

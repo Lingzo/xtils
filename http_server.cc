@@ -39,7 +39,6 @@ HttpServer::~HttpServer() = default;
 
 void HttpServer::Start(int port) {
   std::string ipv4_addr = "127.0.0.1:" + std::to_string(port);
-  // AddAllowedOrigin("http://" + ipv4_addr);
   sock4_ = UnixSocket::Listen(ipv4_addr, this, task_runner_, SockFamily::kInet,
                               SockType::kStream);
   bool ipv4_listening = sock4_ && sock4_->is_listening();
@@ -199,13 +198,8 @@ size_t HttpServer::ParseOneHttpRequest(HttpServerConnection* conn) {
   if (http_req.method == "OPTIONS") {
     HandleCorsPreflightRequest(http_req);
   } else {
-    LogI("%d", http_req.is_websocket_handshake);
-    if (http_req.is_websocket_handshake) {
-      conn->UpgradeToWebsocket(http_req);
-    } else {
-      // Let the HttpHandler handle the request.
-      req_handler_->OnHttpRequest(http_req);
-    }
+    // Let the HttpHandler handle the request.
+    req_handler_->OnHttpRequest(http_req);
   }
 
   // The handler is expected to send a response. If not, bail with a HTTP 500.
@@ -280,7 +274,7 @@ void HttpServerConnection::UpgradeToWebsocket(const HttpRequest& req) {
   auto digest = SHA1Hash(signed_nonce.c_str(), signed_nonce.len());
   std::string digest_b64 = Base64Encode(digest.data(), digest.size());
 
-  std::list<Header> headers = {
+  std::list<NameValue> headers = {
       {"Upgrade", "websocket"},                      //
       {"Connection", "Upgrade"},                     //
       {"Sec-WebSocket-Accept", digest_b64.c_str()},  //
@@ -410,9 +404,9 @@ size_t HttpServer::ParseOneWebsocketFrame(HttpServerConnection* conn) {
   return static_cast<size_t>(rd - rxbuf) + payload_len;
 }
 
-void HttpServerConnection::SendResponseHeaders(const char* http_code,
-                                               const std::list<Header>& headers,
-                                               size_t content_length) {
+void HttpServerConnection::SendResponseHeaders(
+    const char* http_code, const std::list<NameValue>& headers,
+    size_t content_length) {
   CHECK(!headers_sent_);
   CHECK(!is_websocket_);
   headers_sent_ = true;
@@ -477,7 +471,7 @@ void HttpServerConnection::SendResponseBody(const void* data, size_t len) {
 void HttpServerConnection::Close() { sock->Shutdown(/*notify=*/true); }
 
 void HttpServerConnection::SendResponse(const char* http_code,
-                                        const std::list<Header>& headers,
+                                        const std::list<NameValue>& headers,
                                         StringView content, bool force_close) {
   if (force_close) keepalive_ = false;
   SendResponseHeaders(http_code, headers, content.size());
