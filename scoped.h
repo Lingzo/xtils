@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <functional>
 #include <string>
 
 #include "logger.h"
@@ -70,11 +71,19 @@ inline int CloseFile(int fd) { return ::close(fd); }
 using ScopedFile = ScopedResource<int, CloseFile, -1>;
 using ScopedFstream = ScopedResource<FILE*, fclose, nullptr>;
 
-// Use this for resources that are HANDLE on Windows. See comments in
-// platform_handle.h
 using ScopedPlatformHandle = ScopedFile;
 
-// DIR* does not exist on Windows.
 using ScopedDir = ScopedResource<DIR*, closedir, nullptr>;
+
+class Scoped {
+ public:
+  explicit Scoped(std::function<void()> defer) : defer_(defer) {}
+  ~Scoped() {
+    if (defer_) defer_();
+  }
+
+ private:
+  std::function<void()> defer_;
+};
 
 }  // namespace base

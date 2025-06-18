@@ -7,7 +7,7 @@
 #include <mutex>
 #include <thread>
 
-#include "scoped_file.h"
+#include "scoped.h"
 
 namespace base {
 using TimeMillis = std::chrono::milliseconds;

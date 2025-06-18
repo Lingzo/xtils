@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scoped_file.h"
+#include "scoped.h"
 #include "task_runner.h"
 
 namespace base {

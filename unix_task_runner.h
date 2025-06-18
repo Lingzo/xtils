@@ -11,7 +11,7 @@
 
 #include "event_fd.h"
 #include "platform.h"
-#include "scoped_file.h"
+#include "scoped.h"
 #include "task_runner.h"
 
 namespace base {

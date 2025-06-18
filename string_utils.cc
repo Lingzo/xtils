@@ -5,11 +5,9 @@
 #include <string.h>
 
 #include <algorithm>
-
-
 #include <cinttypes>
-#include "logger.h"
 
+#include "logger.h"
 
 namespace base {
 
@@ -31,8 +29,7 @@ bool StartsWithAny(const std::string& str,
 }
 
 bool EndsWith(const std::string& str, const std::string& suffix) {
-  if (suffix.size() > str.size())
-    return false;
+  if (suffix.size() > str.size()) return false;
   return str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
@@ -45,10 +42,8 @@ bool Contains(const std::string& haystack, const char needle) {
 }
 
 size_t Find(const StringView& needle, const StringView& haystack) {
-  if (needle.empty())
-    return 0;
-  if (needle.size() > haystack.size())
-    return std::string::npos;
+  if (needle.empty()) return 0;
+  if (needle.size() > haystack.size()) return std::string::npos;
   for (size_t i = 0; i < haystack.size() - (needle.size() - 1); ++i) {
     if (strncmp(haystack.data() + i, needle.data(), needle.size()) == 0)
       return i;
@@ -77,18 +72,16 @@ std::string Join(const std::vector<std::string>& parts,
 
 std::vector<std::string> SplitString(const std::string& text,
                                      const std::string& delimiter) {
-  // CHECK(!delimiter.empty());
+  CHECK(!delimiter.empty());
 
   std::vector<std::string> output;
   size_t start = 0;
   size_t next;
   for (;;) {
     next = std::min(text.find(delimiter, start), text.size());
-    if (next > start)
-      output.emplace_back(&text[start], next - start);
+    if (next > start) output.emplace_back(&text[start], next - start);
     start = next + delimiter.size();
-    if (start >= text.size())
-      break;
+    if (start >= text.size()) break;
   }
   return output;
 }
@@ -118,8 +111,7 @@ std::string ToUpper(const std::string& str) {
   // Don't use toupper(), it depends on the locale.
   std::string res(str);
   auto end = res.end();
-  for (auto c = res.begin(); c != end; ++c)
-    *c = Uppercase(*c);
+  for (auto c = res.begin(); c != end; ++c) *c = Uppercase(*c);
   return res;
 }
 
@@ -127,8 +119,7 @@ std::string ToLower(const std::string& str) {
   // Don't use tolower(), it depends on the locale.
   std::string res(str);
   auto end = res.end();
-  for (auto c = res.begin(); c != end; ++c)
-    *c = Lowercase(*c);
+  for (auto c = res.begin(); c != end; ++c) *c = Lowercase(*c);
   return res;
 }
 
@@ -167,8 +158,7 @@ std::string Uint64ToHexStringNoPrefix(uint64_t number) {
   return buf;
 }
 
-std::string StripChars(const std::string& str,
-                       const std::string& chars,
+std::string StripChars(const std::string& str, const std::string& chars,
                        char replacement) {
   std::string res(str);
   const char* start = res.c_str();
@@ -178,10 +168,9 @@ std::string StripChars(const std::string& str,
   return res;
 }
 
-std::string ReplaceAll(std::string str,
-                       const std::string& to_replace,
+std::string ReplaceAll(std::string str, const std::string& to_replace,
                        const std::string& replacement) {
-  // CHECK(!to_replace.empty());
+  CHECK(!to_replace.empty());
   size_t pos = 0;
   while ((pos = str.find(to_replace, pos)) != std::string::npos) {
     str.replace(pos, to_replace.length(), replacement);
@@ -268,8 +257,7 @@ bool CheckAsciiAndRemoveInvalidUTF8(base::StringView str, std::string& output) {
 }
 
 size_t SprintfTrunc(char* dst, size_t dst_size, const char* fmt, ...) {
-  if (dst_size == 0)
-    return 0;
+  if (dst_size == 0) return 0;
 
   va_list args;
   va_start(args, fmt);

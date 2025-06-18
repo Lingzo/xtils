@@ -9,7 +9,7 @@
 #include <utility>
 
 #include "logger.h"
-#include "scoped_file.h"
+#include "scoped.h"
 #include "task_runner.h"
 #include "weak_ptr.h"
 

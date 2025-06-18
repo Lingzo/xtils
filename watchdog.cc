@@ -14,7 +14,7 @@
 #include <thread>
 
 #include "logger.h"
-#include "scoped_file.h"
+#include "scoped.h"
 
 namespace base {
 
