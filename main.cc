@@ -14,13 +14,14 @@ class WebHandler : public base::HttpRequestHandler {
       return;
     }
     if (req.uri.ToStr() == "/basic") {
-        if (auto auth = req.GetHeader("Authorization")) {
-           LogI("Authorization: %s", auth->ToStr().c_str());
-           req.conn->SendResponseAndClose("200 OK", {},"OK") ;
-           return;
-        }
-        req.conn->SendResponse("401 No Auth",{{"WWW-Authenticate","Basic realm=\"xtils\""}});
+      if (auto auth = req.GetHeader("Authorization")) {
+        LogI("Authorization: %s", auth->ToStr().c_str());
+        req.conn->SendResponseAndClose("200 OK", {}, "OK");
         return;
+      }
+      req.conn->SendResponse("401 No Auth",
+                             {{"WWW-Authenticate", "Basic realm=\"xtils\""}});
+      return;
     }
     LogI("method: %s \nuri: %s \n%s", req.method.ToStr().c_str(),
          req.uri.ToStr().c_str(), req.body.ToStr().c_str());
