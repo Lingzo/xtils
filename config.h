@@ -85,7 +85,6 @@ class Config {
                                   const Json& default_value) const;
   void apply_defaults();
   std::vector<std::string> split_path(const std::string& path) const;
-  void set_at_path(const std::string& path, const Json& value);
   Json merge_objects(const Json& base, const Json& overlay) const;
 };
 

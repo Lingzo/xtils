@@ -19,7 +19,7 @@ Config& Config::define(const std::string& name, const std::string& description,
 
   // Apply default value immediately if not already set
   if (!has(name)) {
-    set_at_path(name, default_value);
+    set(name, default_value);
   }
 
   return *this;
@@ -105,7 +105,7 @@ bool Config::parse_args(int argc, char* argv[]) {
 
     // For boolean options, if no value is provided, treat as true
     if (!has_value && option_it->second.default_value.is_bool()) {
-      set_at_path(key, Json(true));
+      set(key, Json(true));
     } else if (!has_value) {
       std::cerr << "Option " << key << " requires a value" << std::endl;
       return false;
@@ -117,7 +117,7 @@ bool Config::parse_args(int argc, char* argv[]) {
                   << std::endl;
         return false;
       }
-      set_at_path(key, parsed_value.value());
+      set(key, parsed_value.value());
     }
   }
 
@@ -178,7 +178,36 @@ bool Config::has(const std::string& path) const {
 }
 
 void Config::set(const std::string& path, const Json& value) {
-  set_at_path(path, value);
+  auto parts = split_path(path);
+  if (parts.empty()) return;
+
+  // Ensure data_ is an object
+  if (!data_.is_object()) {
+    data_ = Json::object_t{};
+  }
+
+  Json* current = &data_;
+
+  // Navigate to the parent of the target key
+  for (size_t i = 0; i < parts.size() - 1; ++i) {
+    if (!current->is_object()) {
+      *current = Json::object_t{};
+    }
+
+    // Get or create the nested object
+    if (!current->has_key(parts[i])) {
+      (*current)[parts[i]] = Json::object_t{};
+    }
+    current = &(*current)[parts[i]];
+  }
+
+  // Ensure the current level is an object
+  if (!current->is_object()) {
+    *current = Json::object_t{};
+  }
+
+  // Set the final value
+  (*current)[parts.back()] = value;
 }
 
 bool Config::validate() const {
@@ -293,7 +322,7 @@ std::optional<Json> Config::parse_value(const std::string& value_str,
 void Config::apply_defaults() {
   for (const auto& [name, option] : options_) {
     if (!has(name)) {
-      set_at_path(name, option.default_value);
+      set(name, option.default_value);
     }
   }
 }
@@ -331,39 +360,6 @@ std::optional<Json> Config::get(const std::string& path) const {
   }
 
   return *current;
-}
-
-void Config::set_at_path(const std::string& path, const Json& value) {
-  auto parts = split_path(path);
-  if (parts.empty()) return;
-
-  // Ensure data_ is an object
-  if (!data_.is_object()) {
-    data_ = Json::object_t{};
-  }
-
-  Json* current = &data_;
-
-  // Navigate to the parent of the target key
-  for (size_t i = 0; i < parts.size() - 1; ++i) {
-    if (!current->is_object()) {
-      *current = Json::object_t{};
-    }
-
-    // Get or create the nested object
-    if (!current->has_key(parts[i])) {
-      (*current)[parts[i]] = Json::object_t{};
-    }
-    current = &(*current)[parts[i]];
-  }
-
-  // Ensure the current level is an object
-  if (!current->is_object()) {
-    *current = Json::object_t{};
-  }
-
-  // Set the final value
-  (*current)[parts.back()] = value;
 }
 
 Json Config::merge_objects(const Json& base, const Json& overlay) const {
