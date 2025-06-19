@@ -1,0 +1,167 @@
+{
+  "server": {
+    "port": 9090,
+    "host": "0.0.0.0",
+    "ssl": {
+      "enabled": true,
+      "cert_path": "/etc/ssl/certs/server.crt",
+      "key_path": "/etc/ssl/private/server.key",
+      "protocols": ["TLSv1.2", "TLSv1.3"]
+    },
+    "limits": {
+      "max_connections": 1000,
+      "timeout": 60.0,
+      "keep_alive": 30,
+      "rate_limit": {
+        "requests_per_minute": 100,
+        "burst_size": 10,
+        "window_size": 60
+      }
+    },
+    "worker_threads": 4
+  },
+  "database": {
+    "type": "postgresql",
+    "host": "db.example.com",
+    "port": 5432,
+    "name": "production_db",
+    "username": "app_user",
+    "pool": {
+      "min_connections": 5,
+      "max_connections": 50,
+      "idle_timeout": 300,
+      "connection_timeout": 10,
+      "validation_query": "SELECT 1"
+    },
+    "ssl": {
+      "enabled": true,
+      "verify_ca": true
+    }
+  },
+  "cache": {
+    "type": "redis",
+    "host": "cache.example.com",
+    "port": 6379,
+    "database": 0,
+    "ttl": {
+      "default": 3600,
+      "sessions": 7200,
+      "static_content": 86400
+    },
+    "pool": {
+      "max_connections": 20,
+      "timeout": 5
+    }
+  },
+  "logging": {
+    "level": "info",
+    "file": "/var/log/myapp/app.log",
+    "format": "json",
+    "rotation": {
+      "max_size": "100MB",
+      "max_files": 10,
+      "compress": true
+    },
+    "loggers": {
+      "access": {
+        "file": "/var/log/myapp/access.log",
+        "level": "info"
+      },
+      "error": {
+        "file": "/var/log/myapp/error.log",
+        "level": "error"
+      },
+      "audit": {
+        "file": "/var/log/myapp/audit.log",
+        "level": "info"
+      }
+    }
+  },
+  "security": {
+    "cors": {
+      "enabled": true,
+      "origins": ["https://example.com", "https://app.example.com"],
+      "methods": ["GET", "POST", "PUT", "DELETE"],
+      "headers": ["Content-Type", "Authorization"]
+    },
+    "auth": {
+      "jwt": {
+        "secret": "your-jwt-secret-key",
+        "expiry": 3600,
+        "algorithm": "HS256"
+      },
+      "session": {
+        "timeout": 1800,
+        "secure": true,
+        "same_site": "strict"
+      }
+    },
+    "headers": {
+      "x_frame_options": "DENY",
+      "x_content_type_options": "nosniff",
+      "x_xss_protection": "1; mode=block"
+    }
+  },
+  "features": {
+    "auth": true,
+    "cache": true,
+    "metrics": true,
+    "rate_limiting": true,
+    "file_upload": {
+      "enabled": true,
+      "max_size": "10MB",
+      "allowed_types": [".jpg", ".png", ".pdf", ".docx"]
+    },
+    "notifications": {
+      "email": true,
+      "sms": false,
+      "push": true
+    }
+  },
+  "monitoring": {
+    "metrics": {
+      "enabled": true,
+      "port": 9091,
+      "path": "/metrics"
+    },
+    "health_check": {
+      "enabled": true,
+      "port": 8080,
+      "path": "/health",
+      "interval": 30
+    },
+    "tracing": {
+      "enabled": true,
+      "service_name": "myapp",
+      "jaeger": {
+        "endpoint": "http://jaeger:14268/api/traces"
+      }
+    }
+  },
+  "external_services": {
+    "payment": {
+      "provider": "stripe",
+      "api_key": "sk_test_...",
+      "webhook_secret": "whsec_...",
+      "timeout": 30
+    },
+    "email": {
+      "provider": "sendgrid",
+      "api_key": "SG...",
+      "from_address": "noreply@example.com",
+      "templates": {
+        "welcome": "d-1234567890",
+        "password_reset": "d-0987654321"
+      }
+    },
+    "storage": {
+      "provider": "aws_s3",
+      "bucket": "myapp-uploads",
+      "region": "us-west-2",
+      "credentials": {
+        "access_key": "AKIA...",
+        "secret_key": "..."
+      }
+    }
+  }
+}
