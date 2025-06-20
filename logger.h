@@ -26,6 +26,7 @@ std::string GetStackTrace();
 #define LogD(x, ...) _LOG(x, ##__VA_ARGS__)
 #define LogI(x, ...) _LOG(x, ##__VA_ARGS__)
 #define LogW(x, ...) _LOG(x, ##__VA_ARGS__)
+#define LogE(x, ...) _LOG(x, ##__VA_ARGS__)
 #define LogThis() LogI("==This==")
 
 #define CHECK(expr, ...)                                    \
