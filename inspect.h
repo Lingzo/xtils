@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "json.h"
+#include "string_view.h"
 
 namespace base {
 
@@ -48,11 +49,14 @@ class Inspect {
     std::string content;
     std::string content_type;
     std::string status;
+    bool is_text = true;
 
     Response(const std::string& content = "",
              const std::string& content_type = "text/plain",
              const std::string& status = "200 OK")
         : content(content), content_type(content_type), status(status) {}
+    Response(const std::string& content, bool is_text)
+        : content(content), is_text(is_text) {}
   };
 
   // WebSocket publish result with detailed information
@@ -69,13 +73,13 @@ class Inspect {
 
   // Handler types
   using Handler = std::function<Response(const Request&)>;
-  using WebSocketHandler = std::function<void(const WebSocketRequest&)>;
+  using WebSocketHandler = std::function<Response(const WebSocketRequest&)>;
 
   // Combined route information
   struct RouteInfo {
     std::string description;
-    Handler http_handler;
-    WebSocketHandler websocket_handler;
+    Handler http_handler = nullptr;
+    WebSocketHandler websocket_handler = nullptr;
     bool supports_websocket = false;
 
     RouteInfo() = default;
@@ -192,5 +196,4 @@ class Inspect {
   base::Inspect::Get().Publish(url, message, true)
 #define INSPECT_PUBLISH_BINARY(url, message) \
   base::Inspect::Get().Publish(url, message, false)
-
 }  // namespace base

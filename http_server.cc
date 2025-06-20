@@ -274,7 +274,7 @@ void HttpServerConnection::UpgradeToWebsocket(const HttpRequest& req) {
   auto digest = SHA1Hash(signed_nonce.c_str(), signed_nonce.len());
   std::string digest_b64 = Base64Encode(digest.data(), digest.size());
 
-  std::list<NameValue> headers = {
+  std::list<Header> headers = {
       {"Upgrade", "websocket"},                      //
       {"Connection", "Upgrade"},                     //
       {"Sec-WebSocket-Accept", digest_b64.c_str()},  //
@@ -405,7 +405,7 @@ size_t HttpServer::ParseOneWebsocketFrame(HttpServerConnection* conn) {
 }
 
 void HttpServerConnection::SendResponseHeaders(
-    const char* http_code, const std::list<NameValue>& headers,
+    const char* http_code, const std::list<Header>& headers,
     size_t content_length) {
   CHECK(!headers_sent_);
   CHECK(!is_websocket_);
@@ -471,7 +471,7 @@ void HttpServerConnection::SendResponseBody(const void* data, size_t len) {
 void HttpServerConnection::Close() { sock->Shutdown(/*notify=*/true); }
 
 void HttpServerConnection::SendResponse(const char* http_code,
-                                        const std::list<NameValue>& headers,
+                                        const std::list<Header>& headers,
                                         StringView content, bool force_close) {
   if (force_close) keepalive_ = false;
   SendResponseHeaders(http_code, headers, content.size());

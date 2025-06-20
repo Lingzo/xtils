@@ -35,7 +35,7 @@ inline constexpr const char* AUDIO_MP3 = "audio/mpeg";
 }  // namespace mime
 class HttpServerConnection;
 
-struct NameValue {
+struct Header {
   StringView name;
   StringView value;
 };
@@ -53,10 +53,10 @@ struct HttpRequest {
   StringView uri;
   StringView origin;
   StringView body;
-  std::list<NameValue> params;
+  std::list<Header> params;
 
   static constexpr uint32_t kMaxHeaders = 32;
-  std::array<NameValue, kMaxHeaders> headers{};
+  std::array<Header, kMaxHeaders> headers{};
   bool is_websocket_handshake = false;
 
  private:
@@ -93,10 +93,10 @@ class HttpServerConnection {
 
   // All the above in one shot.
   void SendResponse(const char* http_code,
-                    const std::list<NameValue>& headers = {},
+                    const std::list<Header>& headers = {},
                     StringView content = {}, bool force_close = false);
   void SendResponseAndClose(const char* http_code,
-                            const std::list<NameValue>& headers = {},
+                            const std::list<Header>& headers = {},
                             StringView content = {}) {
     SendResponse(http_code, headers, content, true);
   }
@@ -121,7 +121,7 @@ class HttpServerConnection {
 
  private:
   void SendResponseHeaders(const char* http_code,
-                           const std::list<NameValue>& headers = {},
+                           const std::list<Header>& headers = {},
                            size_t content_length = 0);
 
   // Works also for websockets.

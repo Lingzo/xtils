@@ -131,10 +131,7 @@ int main() {
   INSPECT_DUAL_ROUTE(
       "/ping", "支持http和ws",
       [](const Inspect::Request& req) { return Inspect::TextResponse("pong"); },
-      [](const Inspect::WebSocketRequest& req) {
-        if (req.is_text) LogI("WS text: %s", req.data.c_str());
-        INSPECT_PUBLISH_TEXT("/ping", "Text from ws");
-      });
+      [](const Inspect::WebSocketRequest& req) { return Inspect::Response(req.data,req.is_text); });
 
   // Add a simple demo page
   std::string demo_html = R"(<!DOCTYPE html>
@@ -204,15 +201,14 @@ int main() {
       std::this_thread::sleep_for(std::chrono::seconds(30));
 
       // Send heartbeat to any connected WebSocket clients
-      if (inspect.HasSubscribers("/ws/counter")) {
+      if (inspect.HasSubscribers("/ping")) {
         base::Json heartbeat;
         heartbeat["type"] = "heartbeat";
         heartbeat["timestamp"] = std::time(nullptr);
         heartbeat["counter"] = global_counter.load();
         heartbeat["heartbeat_count"] = ++heartbeat_count;
 
-        auto result =
-            inspect.PublishWithResult("/ws/counter", heartbeat.dump());
+        auto result = inspect.PublishWithResult("/ping", heartbeat.dump());
         if (result.sent_count > 0) {
           LogI("Heartbeat sent to %zu WebSocket subscribers",
                result.sent_count);

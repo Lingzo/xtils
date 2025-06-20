@@ -12,6 +12,7 @@
 #include "json.h"
 #include "logger.h"
 #include "string_utils.h"
+#include "string_view.h"
 #include "task_runner.h"
 
 namespace {
@@ -200,7 +201,10 @@ class Inspect::Impl : public HttpRequestHandler {
 
       // Register default index route
       RegisterHandler("/",
-                      [this](const Inspect::Request&) -> Inspect::Response {
+                      [this](const Inspect::Request& req) -> Inspect::Response {
+                        if (req.query.find("json") != req.query.end()) {
+                          return Inspect::JsonResponse(GetServerInfo());
+                        }
                         return Inspect::HtmlResponse(GenerateIndexPage());
                       });
     }
@@ -408,7 +412,20 @@ class Inspect::Impl : public HttpRequestHandler {
       ws_array.push_back(ws);
     }
     info["websockets"] = base::Json(ws_array);
-
+    {
+      base::Json proc_info;
+      for (const auto& [k, v] : getProcessStatusMap()) {
+        proc_info[k] = v;
+      }
+      info["proc"] = proc_info;
+    }
+    {
+      base::Json sys_info;
+      for (const auto& [k, v] : getSystemStatusMap()) {
+        sys_info[k] = v;
+      }
+      info["sys"] = sys_info;
+    }
     return info;
   }
 
@@ -503,8 +520,19 @@ class Inspect::Impl : public HttpRequestHandler {
         ws_req.is_text = msg.is_text;
         ws_req.connection = static_cast<void*>(msg.conn);
 
-        // Call the handler
-        route_it->second.websocket_handler(ws_req);
+        // Call the handler and get response
+        auto response = route_it->second.websocket_handler(ws_req);
+
+        // Send response if handler returned data
+        if (!response.content.empty()) {
+          if (response.is_text) {
+            msg.conn->SendWebsocketMessageText(response.content.data(),
+                                               response.content.size());
+          } else {
+            msg.conn->SendWebsocketMessage(response.content.data(),
+                                           response.content.size());
+          }
+        }
         return;
       }
     }
@@ -604,7 +632,7 @@ class Inspect::Impl : public HttpRequestHandler {
     }
 
     // Send response
-    std::list<NameValue> headers;
+    std::list<Header> headers;
     headers.push_back({"Content-Type", StringView(response.content_type)});
     if (!cors_origin_.empty()) {
       headers.push_back(
@@ -614,9 +642,8 @@ class Inspect::Impl : public HttpRequestHandler {
       headers.push_back({StringView("Access-Control-Allow-Headers"),
                          StringView("Content-Type, Authorization")});
     }
-    http_req.conn->SendResponse(
-        response.status.c_str(), headers,
-        StringView(response.content.data(), response.content.size()));
+    http_req.conn->SendResponse(response.status.c_str(), headers,
+                                StringView(response.content));
   }
 
   void RemoveWebSocketConnection(HttpServerConnection* conn) {
@@ -684,16 +711,6 @@ class InspectSingleton {
   }
 
   bool IsCreated() const { return instance_ != nullptr; }
-
-  void Reset() {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if (instance_) {
-      instance_->Stop();
-      instance_.reset();
-    }
-    // Note: std::once_flag cannot be reset, so subsequent Create() calls
-    // will not work after Reset(). This is a limitation of the current design.
-  }
 
  private:
   mutable std::recursive_mutex mutex_;
