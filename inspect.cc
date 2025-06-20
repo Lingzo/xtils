@@ -129,9 +129,9 @@ std::map<std::string, std::string> getSystemStatusMap() {
             user + nice + system + idle + iowait + irq + softirq + steal;
         uint64_t work_jiffies = user + nice + system + irq + softirq + steal;
 
-        result["cpu_user_time"] = std::to_string(user / clk_tck) + "s";
-        result["cpu_system_time"] = std::to_string(system / clk_tck) + "s";
-        result["cpu_idle_time"] = std::to_string(idle / clk_tck) + "s";
+        result["cpu_user_time"] = formatSeconds(user / clk_tck);
+        result["cpu_system_time"] = formatSeconds(system / clk_tck);
+        result["cpu_idle_time"] = formatSeconds(idle / clk_tck);
         result["cpu_total_time"] = formatSeconds(total_jiffies / clk_tck);
         result["cpu_work_time"] = formatSeconds(work_jiffies / clk_tck);
         break;
@@ -193,10 +193,6 @@ class Inspect::Impl : public HttpRequestHandler {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     task_runner_ = task_runner;
     port_ = port;
-  }
-
-  void Start() {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!started_ && task_runner_) {
       server_ = std::make_unique<HttpServer>(task_runner_, this);
       server_->Start(port_);
@@ -300,7 +296,7 @@ class Inspect::Impl : public HttpRequestHandler {
     for (auto* conn : connections) {
       try {
         if (conn) {
-          conn->SendWebsocketMessage(message.data(), message.size());
+          conn->SendWebsocketMessageText(message.data(), message.size());
           result.sent_count++;
         }
       } catch (const std::exception& e) {
@@ -403,8 +399,10 @@ class Inspect::Impl : public HttpRequestHandler {
       }
       ReplaceAll(result, "{{ROUTES}}", routes_html);
     }
-    ReplaceAll(result, "{{PROC_INFO}}", Map2Text("ProcessInfo", getProcessStatusMap()));
-    ReplaceAll(result, "{{SYS_INFO}}", Map2Text("SysInfo", getSystemStatusMap()));
+    ReplaceAll(result, "{{PROC_INFO}}",
+               Map2Text("ProcessInfo", getProcessStatusMap()));
+    ReplaceAll(result, "{{SYS_INFO}}",
+               Map2Text("SysInfo", getSystemStatusMap()));
     return result;
   }
 
@@ -491,12 +489,10 @@ class Inspect::Impl : public HttpRequestHandler {
     std::string path = ExtractPath(req.uri.ToStr());
     websocket_connections_[path].push_back(req.conn);
     connection_to_url_[req.conn] = path;
-
-    // The HttpServer will handle the WebSocket upgrade response automatically
+    req.conn->UpgradeToWebsocket(req);
   }
 
   void HandleHttpRequest(const HttpRequest& http_req) {
-    LogThis();
     if (IsWebSocketUpgradeRequest(http_req)) {
       HandleWebSocketUpgrade(http_req);
       return;
@@ -648,8 +644,6 @@ Inspect& Inspect::Create(TaskRunner* task_runner, int port) {
 }
 
 Inspect& Inspect::Get() { return InspectSingleton::Instance().Get(); }
-
-void Inspect::Start() { impl_->Start(); }
 
 void Inspect::Stop() { impl_->Stop(); }
 

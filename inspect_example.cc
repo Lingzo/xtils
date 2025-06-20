@@ -121,7 +121,6 @@ int main() {
                     base::Json ws_message;
                     ws_message["type"] = "counter_update";
                     ws_message["counter"] = new_value;
-                    INSPECT_PUBLISH_JSON("/ws/counter", ws_message);
 
                     return Inspect::JsonResponse(response);
                   }
@@ -193,8 +192,6 @@ int main() {
   LogI("Starting optimized Inspect server on port 8080...");
   LogI("Visit http://localhost:8080/ for API documentation");
   LogI("Visit http://localhost:8080/demo for interactive demo");
-
-  inspect.Start();
 
   // Background thread for periodic WebSocket messages and stats
   std::thread background_thread([&inspect]() {

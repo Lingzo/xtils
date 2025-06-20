@@ -61,7 +61,6 @@ class Inspect {
   static Inspect& Get();
 
   // Server control
-  void Start();
   void Stop();
   bool IsRunning() const;
 
@@ -142,8 +141,5 @@ class Inspect {
 
 // Publish to WebSocket subscribers
 #define INSPECT_PUBLISH(url, message) base::Inspect::Get().Publish(url, message)
-
-// Publish JSON to WebSocket subscribers
-#define INSPECT_PUBLISH_JSON(url, json) base::Inspect::Get().Publish(url, json)
 
 }  // namespace base
