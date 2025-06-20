@@ -164,7 +164,7 @@ inline std::string ToHex(const std::string& s) {
 std::string IntToHexString(uint32_t number);
 std::string Uint64ToHexString(uint64_t number);
 std::string Uint64ToHexStringNoPrefix(uint64_t number);
-std::string ReplaceAll(std::string str, const std::string& to_replace,
+std::string ReplaceAll(std::string& str, const std::string& to_replace,
                        const std::string& replacement);
 
 // Checks if all characters in the input string view `str` are ASCII.

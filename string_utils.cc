@@ -168,7 +168,7 @@ std::string StripChars(const std::string& str, const std::string& chars,
   return res;
 }
 
-std::string ReplaceAll(std::string str, const std::string& to_replace,
+std::string ReplaceAll(std::string& str, const std::string& to_replace,
                        const std::string& replacement) {
   CHECK(!to_replace.empty());
   size_t pos = 0;

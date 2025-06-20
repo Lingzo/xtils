@@ -222,8 +222,8 @@ int main() {
       // Log server statistics
       auto server_info = inspect.GetServerInfo();
       LogI("Server stats - Routes: %ld, WebSocket connections: %ld",
-           server_info["handlers_count"].as_integer(),
-           server_info["total_websocket_connections"].as_integer());
+           server_info["handlers_count"].size(),
+           server_info["total_websocket_connections"].size());
     }
   });
 

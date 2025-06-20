@@ -1,6 +1,7 @@
 #include "inspect.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -10,8 +11,175 @@
 #include "http_server.h"
 #include "json.h"
 #include "logger.h"
+#include "string_utils.h"
 #include "task_runner.h"
 
+namespace {
+namespace fs = std::filesystem;
+std::string formatSeconds(uint64_t seconds) {
+  uint64_t days = seconds / 86400;
+  seconds %= 86400;
+  uint64_t hours = seconds / 3600;
+  seconds %= 3600;
+  uint64_t minutes = seconds / 60;
+  seconds %= 60;
+
+  std::ostringstream oss;
+  if (days > 0) oss << days << "d ";
+  if (hours > 0) oss << hours << "h ";
+  if (minutes > 0) oss << minutes << "m ";
+  oss << seconds << "s";
+  return oss.str();
+}
+std::map<std::string, std::string> getProcessStatusMap() {
+  std::map<std::string, std::string> result;
+  long clk_tck = sysconf(_SC_CLK_TCK);
+
+  // uptime
+  double uptime_seconds = 0.0;
+  {
+    std::ifstream uptime_file("/proc/uptime");
+    uptime_file >> uptime_seconds;
+  }
+
+  // /proc/self/stat
+  {
+    std::ifstream stat_file("/proc/self/stat");
+    std::string line;
+    std::getline(stat_file, line);
+    std::istringstream iss(line);
+    std::vector<std::string> stats;
+    std::string token;
+    while (iss >> token) stats.push_back(token);
+
+    long start_time_ticks = std::stol(stats[21]);
+    double start_time_sec_ago =
+        uptime_seconds - (start_time_ticks / static_cast<double>(clk_tck));
+    result["start_time"] =
+        formatSeconds(static_cast<uint64_t>(start_time_sec_ago));
+
+    long rss_pages = std::stol(stats[23]);
+    size_t rss_kb = rss_pages * sysconf(_SC_PAGESIZE) / 1024;
+    result["memory_rss_kb"] = std::to_string(rss_kb);
+    result["thread_count"] = stats[19];
+  }
+
+  try {
+    size_t fd_count = std::distance(fs::directory_iterator("/proc/self/fd"),
+                                    fs::directory_iterator{});
+    result["fd_count"] = std::to_string(fd_count);
+  } catch (...) {
+    result["fd_count"] = "error";
+  }
+
+  {
+    std::ifstream io_file("/proc/self/io");
+    std::string line;
+    while (std::getline(io_file, line)) {
+      if (line.find("read_bytes:") == 0) {
+        std::istringstream iss(line.substr(11));
+        uint64_t read_bytes;
+        iss >> read_bytes;
+        result["io_read_bytes"] = std::to_string(read_bytes);
+      } else if (line.find("write_bytes:") == 0) {
+        std::istringstream iss(line.substr(12));
+        uint64_t write_bytes;
+        iss >> write_bytes;
+        result["io_write_bytes"] = std::to_string(write_bytes);
+      }
+    }
+  }
+
+  return result;
+}
+
+std::map<std::string, std::string> getSystemStatusMap() {
+  std::map<std::string, std::string> result;
+  long clk_tck = sysconf(_SC_CLK_TCK);
+
+  // System boot time
+  {
+    std::ifstream stat_file("/proc/stat");
+    std::string line;
+    while (std::getline(stat_file, line)) {
+      if (line.rfind("btime ", 0) == 0) {
+        std::istringstream iss(line.substr(6));
+        time_t boot_time;
+        iss >> boot_time;
+        time_t now = time(nullptr);
+        result["boot_time"] =
+            formatSeconds(static_cast<uint64_t>(now - boot_time));
+        break;
+      }
+    }
+  }
+
+  // CPU time
+  {
+    std::ifstream stat_file("/proc/stat");
+    std::string line;
+    while (std::getline(stat_file, line)) {
+      if (line.rfind("cpu ", 0) == 0) {
+        std::istringstream iss(line);
+        std::string label;
+        uint64_t user, nice, system, idle, iowait, irq, softirq, steal;
+        iss >> label >> user >> nice >> system >> idle >> iowait >> irq >>
+            softirq >> steal;
+        uint64_t total_jiffies =
+            user + nice + system + idle + iowait + irq + softirq + steal;
+        uint64_t work_jiffies = user + nice + system + irq + softirq + steal;
+
+        result["cpu_user_time"] = std::to_string(user / clk_tck) + "s";
+        result["cpu_system_time"] = std::to_string(system / clk_tck) + "s";
+        result["cpu_idle_time"] = std::to_string(idle / clk_tck) + "s";
+        result["cpu_total_time"] = formatSeconds(total_jiffies / clk_tck);
+        result["cpu_work_time"] = formatSeconds(work_jiffies / clk_tck);
+        break;
+      }
+    }
+  }
+
+  // Load average
+  {
+    std::ifstream load_file("/proc/loadavg");
+    double l1, l5, l15;
+    load_file >> l1 >> l5 >> l15;
+    result["load_avg_1min"] = std::to_string(l1);
+    result["load_avg_5min"] = std::to_string(l5);
+    result["load_avg_15min"] = std::to_string(l15);
+  }
+
+  // Memory info
+  {
+    std::ifstream mem_file("/proc/meminfo");
+    std::string line;
+    size_t mem_total = 0, mem_available = 0;
+    while (std::getline(mem_file, line)) {
+      if (line.find("MemTotal:") == 0) {
+        std::istringstream iss(line.substr(9));
+        iss >> mem_total;
+      } else if (line.find("MemAvailable:") == 0) {
+        std::istringstream iss(line.substr(13));
+        iss >> mem_available;
+      }
+    }
+    result["memory_total_kb"] = std::to_string(mem_total);
+    result["memory_available_kb"] = std::to_string(mem_available);
+  }
+
+  return result;
+}
+std::string Map2Text(const std::string& title,
+                     const std::map<std::string, std::string>& m) {
+  std::stringstream ss;
+  ss << "=== " << title << " ===\n";
+  for (const auto& [key, value] : m) {
+    ss << key << " : " << value << "\n";
+  }
+  ss << "\n";
+  return ss.str();
+}
+}  // namespace
 namespace base {
 
 // Private implementation class
@@ -216,48 +384,44 @@ class Inspect::Impl : public HttpRequestHandler {
   std::string ReplaceTemplateVars(const std::string& content) const {
     std::string result = content;
     // Replace {{PORT}} with actual port
-    size_t pos = 0;
-    while ((pos = result.find("{{PORT}}", pos)) != std::string::npos) {
-      result.replace(pos, 8, std::to_string(port_));
-      pos += std::to_string(port_).length();
-    }
+    ReplaceAll(result, "{{PORT}}", std::to_string(port_));
 
     // Replace {{ROUTES}} with route list
-    pos = 0;
-    while ((pos = result.find("{{ROUTES}}", pos)) != std::string::npos) {
+    {
       std::string routes_html;
       for (const auto& pair : handlers_) {
-        routes_html +=
-            "<li><a href=\"" + pair.first + "\">" + pair.first + "</a>";
+        std::string item =
+            R"(<li><a href="{{URL}}">{{URL}}</a> - {{DESC}}</li>)";
+        ReplaceAll(item, "{{URL}}", pair.first);
         auto desc_it = route_descriptions_.find(pair.first);
         if (desc_it != route_descriptions_.end() && !desc_it->second.empty()) {
-          routes_html += " - " + desc_it->second;
+          ReplaceAll(item, "{{DESC}}", desc_it->second);
+        } else {
+          ReplaceAll(item, "{{DESC}}", "");
         }
-        routes_html += "</li>";
+        routes_html += item;
       }
-      result.replace(pos, 10, routes_html);
-      pos += routes_html.length();
+      ReplaceAll(result, "{{ROUTES}}", routes_html);
     }
-
+    ReplaceAll(result, "{{PROC_INFO}}", Map2Text("ProcessInfo", getProcessStatusMap()));
+    ReplaceAll(result, "{{SYS_INFO}}", Map2Text("SysInfo", getSystemStatusMap()));
     return result;
   }
 
   std::string GenerateIndexPage() const {
     std::string html = R"(<!DOCTYPE html>
-<html>
-<head><title>Inspect Server</title></head>
-<body>
-<h1>Inspect Server - Port {{PORT}}</h1>
-<h2>Available Routes</h2>
-<ul>{{ROUTES}}</ul>
-<h2>Server Info</h2>
-<p>Status: Running</p>
-<p>Routes: )" + std::to_string(handlers_.size()) +
-                       R"(</p>
-<p>WebSocket URLs: )" + std::to_string(websocket_connections_.size()) +
-                       R"(</p>
-</body>
-</html>)";
+          <html>
+          <head><title>Inspect Server</title></head>
+          <body>
+          <h1>Inspect Server - Port {{PORT}}</h1>
+          <h2>Available Routes</h2>
+          <ul>{{ROUTES}}</ul>
+          <h2>Server Info</h2>
+          <p>Status: Running</p>
+          <pre>{{PROC_INFO}}</pre>
+          <pre>{{SYS_INFO}}</pre>
+          </body>
+          </html>)";
 
     return ReplaceTemplateVars(html);
   }
