@@ -8,6 +8,7 @@ file(GLOB EX_SRCS main.cc json_test.cc config_example.cc config_test.cc inspect_
 file(GLOB SRCS "*.cc")
 list(REMOVE_ITEM SRCS ${EX_SRCS})
 add_executable(http_server ${SRCS} main.cc)
+add_link_options(-rdynamic)
 target_link_options(http_server PUBLIC -rdynamic)
 
 add_executable(json_test ${SRCS} json_test.cc)

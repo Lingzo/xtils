@@ -48,7 +48,7 @@ static std::string Demangle(const std::string &trace_name) {
 
 std::string GetStackTrace() {
   std::string ans;
-  constexpr const std::size_t kMaxTraceSize = 30;
+  constexpr const std::size_t kMaxTraceSize = 20;
 
   void *trace[kMaxTraceSize];
   // Get the trace.

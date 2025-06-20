@@ -29,6 +29,20 @@ class Inspect {
     std::string body;
   };
 
+  // WebSocket request information
+  struct WebSocketRequest {
+    std::string path;
+    std::map<std::string, std::string> query;
+    std::string data;
+    bool is_text;
+    void* connection;  // HttpServerConnection* - opaque pointer to avoid header
+                       // dependency
+
+    WebSocketRequest(const std::string& path = "", const std::string& data = "",
+                     bool is_text = true, void* connection = nullptr)
+        : path(path), data(data), is_text(is_text), connection(connection) {}
+  };
+
   // Response information
   struct Response {
     std::string content;
@@ -55,6 +69,25 @@ class Inspect {
 
   // Handler types
   using Handler = std::function<Response(const Request&)>;
+  using WebSocketHandler = std::function<void(const WebSocketRequest&)>;
+
+  // Combined route information
+  struct RouteInfo {
+    std::string description;
+    Handler http_handler;
+    WebSocketHandler websocket_handler;
+    bool supports_websocket = false;
+
+    RouteInfo() = default;
+    RouteInfo(const std::string& desc, Handler handler)
+        : description(desc), http_handler(handler) {}
+    RouteInfo(const std::string& desc, Handler handler,
+              WebSocketHandler ws_handler)
+        : description(desc),
+          http_handler(handler),
+          websocket_handler(ws_handler),
+          supports_websocket(true) {}
+  };
 
   // Factory methods - Thread-safe singleton pattern
   static Inspect& Create(TaskRunner* task_runner, int port = 8080);
@@ -72,11 +105,20 @@ class Inspect {
   void Unregister(const std::string& path);
   bool HasRoute(const std::string& path) const;
 
-  // WebSocket publishing
-  size_t Publish(const std::string& url, const std::string& message);
+  // Combined HTTP/WebSocket routing
+  void RouteWithHandlers(const std::string& path,
+                         const std::string& description, Handler http_handler,
+                         WebSocketHandler ws_handler);
+
+  bool HasWebSocketRoute(const std::string& path) const;
+
+  // WebSocket publishing (broadcast to all subscribers of a URL)
+  size_t Publish(const std::string& url, const std::string& message,
+                 bool is_text = true);
   size_t Publish(const std::string& url, const base::Json& json);
   PublishResult PublishWithResult(const std::string& url,
-                                  const std::string& message);
+                                  const std::string& message,
+                                  bool is_text = true);
 
   bool HasSubscribers(const std::string& url) const;
   size_t GetSubscriberCount(const std::string& url) const;
@@ -97,7 +139,10 @@ class Inspect {
   base::Json GetServerInfo() const;
   void SetCORS(const std::string& allow_origin = "*");
   std::vector<std::string> GetRoutes() const;
-  std::vector<std::string> GetWebSocketUrls() const;
+  std::vector<std::string> GetWebSocketUrls()
+      const;  // Active WebSocket connections
+  std::vector<std::string> GetWebSocketRoutes()
+      const;  // Registered WebSocket handlers
 
   // Non-copyable, non-movable
   Inspect(const Inspect&) = delete;
@@ -127,19 +172,25 @@ class Inspect {
     base::Inspect::Get().RouteWithDescription(path, description, handler); \
   } while (0)
 
-// Register simple route without description
-#define INSPECT_ROUTE_SIMPLE(path, handler)                       \
-  do {                                                            \
-    base::Inspect::Get().RouteWithDescription(path, "", handler); \
-  } while (0)
-
 // Register static content
 #define INSPECT_STATIC(path, content, content_type)           \
   do {                                                        \
     base::Inspect::Get().Static(path, content, content_type); \
   } while (0)
 
-// Publish to WebSocket subscribers
-#define INSPECT_PUBLISH(url, message) base::Inspect::Get().Publish(url, message)
+// Register combined HTTP and WebSocket handlers for the same path
+#define INSPECT_DUAL_ROUTE(path, description, http_handler, ws_handler)     \
+  do {                                                                      \
+    base::Inspect::Get().RouteWithHandlers(path, description, http_handler, \
+                                           ws_handler);                     \
+  } while (0)
+
+// WebSocket publishing to all subscribers
+#define INSPECT_PUBLISH(url, message) \
+  base::Inspect::Get().Publish(url, message, true)
+#define INSPECT_PUBLISH_TEXT(url, message) \
+  base::Inspect::Get().Publish(url, message, true)
+#define INSPECT_PUBLISH_BINARY(url, message) \
+  base::Inspect::Get().Publish(url, message, false)
 
 }  // namespace base

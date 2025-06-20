@@ -223,36 +223,36 @@ class Inspect::Impl : public HttpRequestHandler {
 
   void RegisterHandler(const std::string& path, Inspect::Handler handler) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    handlers_[path] = std::move(handler);
+    routes_[path].http_handler = handler;
   }
 
   void RegisterHandlerWithDescription(const std::string& path,
                                       const std::string& description,
                                       Inspect::Handler handler) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    handlers_[path] = std::move(handler);
-    if (!description.empty()) {
-      route_descriptions_[path] = description;
-    }
+    routes_[path].description = description;
+    routes_[path].http_handler = handler;
   }
 
   void UnregisterHandler(const std::string& path) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    handlers_.erase(path);
-    route_descriptions_.erase(path);
+    routes_.erase(path);
   }
 
   bool HasHandler(const std::string& path) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    return handlers_.find(path) != handlers_.end();
+    auto it = routes_.find(path);
+    return it != routes_.end() && it->second.http_handler;
   }
 
   std::vector<std::string> GetHandlerPaths() const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::vector<std::string> paths;
-    paths.reserve(handlers_.size());
-    for (const auto& pair : handlers_) {
-      paths.push_back(pair.first);
+    paths.reserve(routes_.size());
+    for (const auto& pair : routes_) {
+      if (pair.second.http_handler) {
+        paths.push_back(pair.first);
+      }
     }
     std::sort(paths.begin(), paths.end());
     return paths;
@@ -269,12 +269,43 @@ class Inspect::Impl : public HttpRequestHandler {
     return urls;
   }
 
-  size_t PublishEvent(const std::string& url, const std::string& message) {
-    return PublishEventWithResult(url, message).sent_count;
+  void RegisterHandlersWithDescription(const std::string& path,
+                                       const std::string& description,
+                                       Inspect::Handler http_handler,
+                                       Inspect::WebSocketHandler ws_handler) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    routes_[path].description = description;
+    routes_[path].http_handler = http_handler;
+    routes_[path].websocket_handler = ws_handler;
+    routes_[path].supports_websocket = true;
+  }
+
+  bool HasWebSocketHandler(const std::string& path) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = routes_.find(path);
+    return it != routes_.end() && it->second.supports_websocket;
+  }
+
+  std::vector<std::string> GetWebSocketHandlerPaths() const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<std::string> paths;
+    for (const auto& pair : routes_) {
+      if (pair.second.supports_websocket) {
+        paths.push_back(pair.first);
+      }
+    }
+    std::sort(paths.begin(), paths.end());
+    return paths;
+  }
+
+  size_t PublishEvent(const std::string& url, const std::string& message,
+                      bool is_text = true) {
+    return PublishEventWithResult(url, message, is_text).sent_count;
   }
 
   Inspect::PublishResult PublishEventWithResult(const std::string& url,
-                                                const std::string& message) {
+                                                const std::string& message,
+                                                bool is_text = true) {
     Inspect::PublishResult result;
 
     auto it = websocket_connections_.find(url);
@@ -296,7 +327,11 @@ class Inspect::Impl : public HttpRequestHandler {
     for (auto* conn : connections) {
       try {
         if (conn) {
-          conn->SendWebsocketMessageText(message.data(), message.size());
+          if (is_text) {
+            conn->SendWebsocketMessageText(message.data(), message.size());
+          } else {
+            conn->SendWebsocketMessage(message.data(), message.size());
+          }
           result.sent_count++;
         }
       } catch (const std::exception& e) {
@@ -348,13 +383,13 @@ class Inspect::Impl : public HttpRequestHandler {
     info["port"] = port_;
     info["running"] = IsRunning();
     base::Json::array_t routes_array;
-    for (const auto& pair : handlers_) {
+    for (const auto& pair : routes_) {
       base::Json route;
       route["path"] = pair.first;
-      auto desc_it = route_descriptions_.find(pair.first);
-      if (desc_it != route_descriptions_.end()) {
-        route["description"] = desc_it->second;
+      if (!pair.second.description.empty()) {
+        route["description"] = pair.second.description;
       }
+      route["supports_websocket"] = pair.second.supports_websocket;
       routes_array.push_back(route);
     }
     info["routes"] = base::Json(routes_array);
@@ -385,17 +420,18 @@ class Inspect::Impl : public HttpRequestHandler {
     // Replace {{ROUTES}} with route list
     {
       std::string routes_html;
-      for (const auto& pair : handlers_) {
-        std::string item =
-            R"(<li><a href="{{URL}}">{{URL}}</a> - {{DESC}}</li>)";
-        ReplaceAll(item, "{{URL}}", pair.first);
-        auto desc_it = route_descriptions_.find(pair.first);
-        if (desc_it != route_descriptions_.end() && !desc_it->second.empty()) {
-          ReplaceAll(item, "{{DESC}}", desc_it->second);
-        } else {
-          ReplaceAll(item, "{{DESC}}", "");
+      for (const auto& pair : routes_) {
+        if (pair.second.http_handler) {
+          std::string item =
+              R"(<li><a href="{{URL}}">{{URL}}</a> - {{DESC}}</li>)";
+          ReplaceAll(item, "{{URL}}", pair.first);
+          if (!pair.second.description.empty()) {
+            ReplaceAll(item, "{{DESC}}", pair.second.description);
+          } else {
+            ReplaceAll(item, "{{DESC}}", "");
+          }
+          routes_html += item;
         }
-        routes_html += item;
       }
       ReplaceAll(result, "{{ROUTES}}", routes_html);
     }
@@ -409,7 +445,10 @@ class Inspect::Impl : public HttpRequestHandler {
   std::string GenerateIndexPage() const {
     std::string html = R"(<!DOCTYPE html>
           <html>
-          <head><title>Inspect Server</title></head>
+          <head>
+          <title>Inspect Server</title>
+          <meta charset="UTF-8">
+          </head>
           <body>
           <h1>Inspect Server - Port {{PORT}}</h1>
           <h2>Available Routes</h2>
@@ -438,8 +477,38 @@ class Inspect::Impl : public HttpRequestHandler {
   }
 
   void OnWebsocketMessage(const WebsocketMessage& msg) override {
-    // Handle incoming WebSocket message
-    // In a real implementation, this might route messages to handlers
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    // Find the path for this connection
+    auto conn_it = connection_to_url_.find(msg.conn);
+    if (conn_it == connection_to_url_.end()) {
+      return;  // Connection not found
+    }
+
+    std::string path = conn_it->second;
+
+    // Check if there's a WebSocket handler for this path
+    auto route_it = routes_.find(path);
+    if (route_it != routes_.end()) {
+      if (route_it->second.supports_websocket &&
+          route_it->second.websocket_handler) {
+        // Extract query parameters from the original path
+        std::map<std::string, std::string> query = ParseQueryParams(path);
+
+        // Create WebSocket request
+        Inspect::WebSocketRequest ws_req;
+        ws_req.path = ExtractPath(path);
+        ws_req.query = query;
+        ws_req.data = msg.data.ToStr();
+        ws_req.is_text = msg.is_text;
+        ws_req.connection = static_cast<void*>(msg.conn);
+
+        // Call the handler
+        route_it->second.websocket_handler(ws_req);
+        return;
+      }
+    }
+    LogW("can't be here");
   }
 
   void OnHttpConnectionClosed(HttpServerConnection* conn) override {
@@ -493,11 +562,6 @@ class Inspect::Impl : public HttpRequestHandler {
   }
 
   void HandleHttpRequest(const HttpRequest& http_req) {
-    if (IsWebSocketUpgradeRequest(http_req)) {
-      HandleWebSocketUpgrade(http_req);
-      return;
-    }
-
     std::string uri_str = http_req.uri.ToStr();
     std::string path = ExtractPath(uri_str);
     auto query_params = ParseQueryParams(uri_str);
@@ -517,14 +581,22 @@ class Inspect::Impl : public HttpRequestHandler {
     Inspect::Response response;
     {
       std::lock_guard<std::recursive_mutex> lock(mutex_);
-      auto handler_it = handlers_.find(path);
-
-      if (handler_it != handlers_.end()) {
-        try {
-          response = handler_it->second(req);
-        } catch (const std::exception& e) {
-          response =
-              Inspect::ErrorResponse("Handler error: " + std::string(e.what()));
+      auto route_it = routes_.find(path);
+      if (route_it != routes_.end()) {
+        if (!http_req.is_websocket_handshake) {
+          try {
+            response = route_it->second.http_handler(req);
+          } catch (const std::exception& e) {
+            response = Inspect::ErrorResponse("Handler error: " +
+                                              std::string(e.what()));
+          }
+        } else {
+          if (route_it->second.supports_websocket) {
+            HandleWebSocketUpgrade(http_req);
+            return;
+          } else {
+            response = Inspect::NotFoundResponse("WebSocket not supported");
+          }
         }
       } else {
         response = Inspect::NotFoundResponse("Route not found: " + path);
@@ -576,8 +648,7 @@ class Inspect::Impl : public HttpRequestHandler {
   bool started_;
   std::string cors_origin_;
 
-  std::map<std::string, Inspect::Handler> handlers_;
-  std::map<std::string, std::string> route_descriptions_;
+  std::map<std::string, Inspect::RouteInfo> routes_;
   std::map<std::string, std::vector<HttpServerConnection*>>
       websocket_connections_;
   std::map<HttpServerConnection*, std::string> connection_to_url_;
@@ -671,17 +742,19 @@ bool Inspect::HasRoute(const std::string& path) const {
   return impl_->HasHandler(path);
 }
 
-size_t Inspect::Publish(const std::string& url, const std::string& message) {
-  return impl_->PublishEvent(url, message);
+size_t Inspect::Publish(const std::string& url, const std::string& message,
+                        bool is_text) {
+  return impl_->PublishEvent(url, message, is_text);
 }
 
 size_t Inspect::Publish(const std::string& url, const base::Json& json) {
-  return impl_->PublishEvent(url, json.dump());
+  return impl_->PublishEvent(url, json.dump(), true);
 }
 
 Inspect::PublishResult Inspect::PublishWithResult(const std::string& url,
-                                                  const std::string& message) {
-  return impl_->PublishEventWithResult(url, message);
+                                                  const std::string& message,
+                                                  bool is_text) {
+  return impl_->PublishEventWithResult(url, message, is_text);
 }
 
 bool Inspect::HasSubscribers(const std::string& url) const {
@@ -735,6 +808,22 @@ std::vector<std::string> Inspect::GetRoutes() const {
 
 std::vector<std::string> Inspect::GetWebSocketUrls() const {
   return impl_->GetWebSocketUrls();
+}
+
+void Inspect::RouteWithHandlers(const std::string& path,
+                                const std::string& description,
+                                Handler http_handler,
+                                WebSocketHandler ws_handler) {
+  impl_->RegisterHandlersWithDescription(path, description, http_handler,
+                                         ws_handler);
+}
+
+bool Inspect::HasWebSocketRoute(const std::string& path) const {
+  return impl_->HasWebSocketHandler(path);
+}
+
+std::vector<std::string> Inspect::GetWebSocketRoutes() const {
+  return impl_->GetWebSocketHandlerPaths();
 }
 
 }  // namespace base

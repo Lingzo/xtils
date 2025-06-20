@@ -128,10 +128,13 @@ int main() {
                                                 "405 Method Not Allowed");
                 });
 
-  // Register a static route using the simple macro
-  INSPECT_ROUTE_SIMPLE("/ping", [](const Inspect::Request& req) {
-    return Inspect::TextResponse("pong");
-  });
+  INSPECT_DUAL_ROUTE(
+      "/ping", "支持http和ws",
+      [](const Inspect::Request& req) { return Inspect::TextResponse("pong"); },
+      [](const Inspect::WebSocketRequest& req) {
+        if (req.is_text) LogI("WS text: %s", req.data.c_str());
+        INSPECT_PUBLISH_TEXT("/ping", "Text from ws");
+      });
 
   // Add a simple demo page
   std::string demo_html = R"(<!DOCTYPE html>
