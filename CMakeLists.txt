@@ -13,20 +13,7 @@ target_include_directories(xtils PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-add_executable(json_test tests/json_test.cc)
-target_link_libraries(json_test PUBLIC xtils)
-
-add_executable(config_test tests/config_test.cc)
-target_link_libraries(config_test PUBLIC xtils)
-
-add_executable(inspect_example examples/inspect_example.cc)
-target_link_libraries(inspect_example PUBLIC xtils)
-
-add_executable(logger_example examples/logger_example.cc)
-target_link_libraries(logger_example PUBLIC xtils)
-
-add_executable(fsm_example examples/fsm_example.cc)
-target_link_libraries(fsm_example PUBLIC xtils)
+add_subdirectory(tests)
 
 # Installation configuration
 include(GNUInstallDirs)
