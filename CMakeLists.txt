@@ -14,6 +14,7 @@ target_include_directories(xtils PUBLIC
 )
 
 add_subdirectory(tests)
+add_subdirectory(examples)
 
 # Installation configuration
 include(GNUInstallDirs)

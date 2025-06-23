@@ -183,6 +183,7 @@ void UnixTaskRunner::PostTask(std::function<void()> task) {
   bool was_empty;
   {
     std::lock_guard<std::mutex> lock(lock_);
+    if (quit_) return;
     was_empty = immediate_tasks_.empty();
     immediate_tasks_.push_back(std::move(task));
   }

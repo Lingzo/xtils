@@ -274,6 +274,7 @@ void Logger::write_log_sync(const char* tag, const source_loc& loc,
                             log_level level, const std::string& message) {
   impl_->write_log_sync(tag, loc, level, message);
 }
+void Logger::addSink(std::unique_ptr<Sink> s) { impl_->addSink(std::move(s)); }
 
 void Logger::flush() { impl_->flush(); }
 
