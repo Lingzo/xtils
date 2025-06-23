@@ -1,0 +1,36 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find dependencies if any
+# find_dependency(SomePackage REQUIRED)
+
+# Include the targets file
+include("${CMAKE_CURRENT_LIST_DIR}/xtils-targets.cmake")
+
+# Check that all required components are available
+check_required_components(xtils)
+
+# Provide the imported target
+if(TARGET xtils::xtils)
+    get_target_property(_xtils_type xtils::xtils TYPE)
+    if(_xtils_type STREQUAL "STATIC_LIBRARY")
+        set(xtils_LIBRARIES xtils::xtils)
+    else()
+        set(xtils_LIBRARIES xtils::xtils)
+    endif()
+
+    get_target_property(xtils_INCLUDE_DIRS xtils::xtils INTERFACE_INCLUDE_DIRECTORIES)
+    if(NOT xtils_INCLUDE_DIRS)
+        set(xtils_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+    endif()
+
+    set(xtils_FOUND TRUE)
+else()
+    set(xtils_FOUND FALSE)
+endif()
+
+# Legacy variables for compatibility
+set(XTILS_FOUND ${xtils_FOUND})
+set(XTILS_INCLUDE_DIRS ${xtils_INCLUDE_DIRS})
+set(XTILS_LIBRARIES ${xtils_LIBRARIES})
