@@ -12,14 +12,23 @@
  * Changelog:
  */
 
-#include "sink.h"
+#include "xtils/logging/sink.h"
 
 #include <unistd.h>
 
 #include <cassert>
+#include <cstdio>
 #include <filesystem>
 
 namespace logger {
+
+void ConsoleSink::write_log(const char* buf, std::size_t start,
+                            std::size_t len) {
+  int n = write(STDOUT_FILENO, buf + start, len);
+  assert(n == len);
+}
+
+void ConsoleSink::flush() { fsync(STDOUT_FILENO); }
 
 class FileSink::Impl {
  public:
@@ -46,7 +55,7 @@ class FileSink::Impl {
 
     byte_counts_ += n;
   }
-  
+
   void rotate() {
     fflush(logger_file_);
     int fd = fileno(logger_file_);
@@ -73,6 +82,9 @@ class FileSink::Impl {
     logger_file_ = fopen(name_.c_str(), "a");
     byte_counts_ = fseek(logger_file_, 0, SEEK_END);
   }
+  void flush() {
+    if (logger_file_) fflush(logger_file_);
+  }
   std::size_t byte_counts_;
   std::string name_;
   std::size_t max_bytes_;
@@ -89,5 +101,7 @@ FileSink::~FileSink() { delete impl; }
 void FileSink::write_log(const char* buf, std::size_t start, std::size_t len) {
   impl->write_log(buf, start, len);
 }
+
+void FileSink::flush() { impl->flush(); }
 
 }  // namespace logger

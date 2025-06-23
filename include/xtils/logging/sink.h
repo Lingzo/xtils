@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <unistd.h>
+
 #include <cassert>
 #include <cstddef>
 #include <string>
@@ -23,13 +25,12 @@ struct Sink {
   virtual ~Sink() {}
   virtual void write_log(const char* buf, std::size_t start,
                          std::size_t len) = 0;  // noblocking write
+  virtual void flush() = 0;
 };
 class ConsoleSink : public Sink {
  public:
-  void write_log(const char* buf, std::size_t start, std::size_t len) override {
-    int n = fwrite(buf + start, sizeof(char), len, stdout);
-    assert(n == len);
-  }
+  void write_log(const char* buf, std::size_t start, std::size_t len) override;
+  void flush() override;
 };
 class FileSink : public Sink {
  public:
@@ -37,6 +38,7 @@ class FileSink : public Sink {
            std::size_t max_items);
   ~FileSink();
   void write_log(const char* buf, std::size_t start, std::size_t len) override;
+  void flush() override;
 
  private:
   class Impl;

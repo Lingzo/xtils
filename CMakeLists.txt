@@ -22,6 +22,9 @@ target_link_libraries(config_test PUBLIC xtils)
 add_executable(inspect_example examples/inspect_example.cc)
 target_link_libraries(inspect_example PUBLIC xtils)
 
+add_executable(logger_example examples/logger_example.cc)
+target_link_libraries(logger_example PUBLIC xtils)
+
 # Installation configuration
 include(GNUInstallDirs)
 

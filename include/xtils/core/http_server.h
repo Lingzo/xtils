@@ -11,7 +11,7 @@
 #include "xtils/system/paged_memory.h"
 #include "xtils/system/unix_socket.h"
 #include "xtils/tasks/task_runner.h"
-#include "xtils/utils/string_utils.h"
+#include "xtils/utils/string_view.h"
 
 namespace xtils {
 class HttpServerConnection;
