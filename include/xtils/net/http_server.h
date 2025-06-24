@@ -157,6 +157,7 @@ class HttpServer : public UnixSocket::EventListener {
   HttpServer(TaskRunner*, HttpRequestHandler*);
   ~HttpServer() override;
   void Start(int port);
+  void Stop();
   void AddAllowedOrigin(const std::string&);
 
  private:
@@ -178,6 +179,7 @@ class HttpServer : public UnixSocket::EventListener {
   std::list<HttpServerConnection> clients_;
   std::list<std::string> allowed_origins_;
   bool origin_error_logged_ = false;
+  bool is_stopping_ = false;
 };
 
 }  // namespace xtils

@@ -35,7 +35,7 @@ inline uint64_t HostToBE64(uint64_t x) { return __builtin_bswap64(x); }
 
 HttpServer::HttpServer(TaskRunner* task_runner, HttpRequestHandler* req_handler)
     : task_runner_(task_runner), req_handler_(req_handler) {}
-HttpServer::~HttpServer() = default;
+HttpServer::~HttpServer() { Stop(); }
 
 void HttpServer::Start(int port) {
   std::string ipv4_addr = "127.0.0.1:" + std::to_string(port);
@@ -52,9 +52,40 @@ void HttpServer::AddAllowedOrigin(const std::string& origin) {
   allowed_origins_.emplace_back(origin);
 }
 
+void HttpServer::Stop() {
+  if (is_stopping_) {
+    return;  // Already stopping or stopped
+  }
+  is_stopping_ = true;
+
+  LogD("[HTTP] Stopping server...");
+
+  // Stop listening for new connections
+  if (sock4_) {
+    sock4_->Shutdown(/*notify=*/false);
+    sock4_.reset();
+  }
+
+  // Close all existing client connections
+  for (auto& client : clients_) {
+    if (client.sock) {
+      req_handler_->OnHttpConnectionClosed(&client);
+      client.sock->Shutdown(/*notify=*/false);
+    }
+  }
+  clients_.clear();
+
+  LogD("[HTTP] Server stopped");
+}
+
 void HttpServer::OnNewIncomingConnection(
     UnixSocket*,  // The listening socket, irrelevant here.
     std::unique_ptr<UnixSocket> sock) {
+  if (is_stopping_) {
+    LogD("[HTTP] Rejecting new connection - server is stopping");
+    sock->Shutdown(/*notify=*/false);
+    return;
+  }
   LogD("[HTTP] New connection");
   clients_.emplace_back(std::move(sock));
 }
@@ -63,14 +94,15 @@ void HttpServer::OnConnect(UnixSocket*, bool) {}
 
 void HttpServer::OnDisconnect(UnixSocket* sock) {
   LogD("[HTTP] Client disconnected");
-  for (auto it = clients_.begin(); it != clients_.end(); ++it) {
-    if (it->sock.get() == sock) {
-      req_handler_->OnHttpConnectionClosed(&*it);
-      clients_.erase(it);
-      return;
+  if (!is_stopping_) {
+    for (auto it = clients_.begin(); it != clients_.end(); ++it) {
+      if (it->sock.get() == sock) {
+        req_handler_->OnHttpConnectionClosed(&*it);
+        clients_.erase(it);
+        return;
+      }
     }
   }
-  FATAL("[HTTP] Untracked client in OnDisconnect()");
 }
 
 void HttpServer::OnDataAvailable(UnixSocket* sock) {

@@ -12,6 +12,16 @@ target_include_directories(xtils PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build" FORCE)
+endif()
+target_compile_options(xtils PUBLIC     
+    $<$<CONFIG:Debug>:-g -O0 -fno-omit-frame-pointer>
+    $<$<CONFIG:Release>:-O2 -DNDEBUG>
+    $<$<CONFIG:RelWithDebInfo>:-O2 -g -DNDEBUG>
+    $<$<CONFIG:MinSizeRel>:-Os -DNDEBUG>)
+#target_link_options(xtils PUBLIC 
+#    $<$<CONFIG:Debug>:-fsanitize=address>)
 
 add_subdirectory(tests)
 add_subdirectory(examples)

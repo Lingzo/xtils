@@ -325,8 +325,8 @@ void _write_log(logger::Logger* log, const char* name,
 
   va_end(args);
 
-  // Use async logging for better performance, except for ERROR and above
-  if (level >= logger::ERROR) {
+  // Use async logging for better performance, except for INFO and above
+  if (level >= logger::INFO) {
     log->write_log_sync(name, lc, level, message_buffer);
   } else {
     log->write_log_async(name, lc, level, message_buffer);

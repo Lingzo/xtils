@@ -139,7 +139,7 @@ void error_handling_example() {
   bool condition = false;
 
   // CHECK macro - logs warning but continues execution
-  CHECK(condition, "This condition failed but program continues");
+  CHECK(condition);
 
   // DCHECK - same as CHECK
   DCHECK(condition);

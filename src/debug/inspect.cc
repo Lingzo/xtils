@@ -214,10 +214,9 @@ class Inspect::Impl : public HttpRequestHandler {
   void Stop() {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (started_ && server_) {
-      server_.reset();
-      started_ = false;
       websocket_connections_.clear();
       connection_to_url_.clear();
+      started_ = false;
     }
   }
 
@@ -734,7 +733,10 @@ Inspect& Inspect::Create(TaskRunner* task_runner, int port) {
 
 Inspect& Inspect::Get() { return InspectSingleton::Instance().Get(); }
 
-void Inspect::Stop() { impl_->Stop(); }
+void Inspect::Stop() {
+  impl_->Stop();
+  impl_.reset();
+}
 
 bool Inspect::IsRunning() const { return impl_->IsRunning(); }
 

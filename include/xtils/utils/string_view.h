@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace xtils {
@@ -119,8 +120,7 @@ class StringView {
   }
 
   uint64_t Hash() const {
-    std::hash<std::string> hasher;
-    return std::hash<std::string>{}(data_);
+    return std::hash<std::string_view>{}(std::string_view(data_, size_));
   }
 
  private:

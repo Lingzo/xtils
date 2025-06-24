@@ -740,12 +740,13 @@ void UnixSocket::Shutdown(bool notify) {
   if (notify) {
     if (state_ == State::kConnected) {
       task_runner_->PostTask([weak_ptr] {
-        if (weak_ptr) weak_ptr->event_listener_->OnDisconnect(weak_ptr.get());
+        auto* socket = weak_ptr.get();
+        if (socket) socket->event_listener_->OnDisconnect(socket);
       });
     } else if (state_ == State::kConnecting) {
       task_runner_->PostTask([weak_ptr] {
-        if (weak_ptr)
-          weak_ptr->event_listener_->OnConnect(weak_ptr.get(), false);
+        auto* socket = weak_ptr.get();
+        if (socket) socket->event_listener_->OnConnect(socket, false);
       });
     }
   }
@@ -786,7 +787,8 @@ void UnixSocket::NotifyConnectionState(bool success) {
 
   auto weak_ptr = weak_ptr_factory_.GetWeakPtr();
   task_runner_->PostTask([weak_ptr, success] {
-    if (weak_ptr) weak_ptr->event_listener_->OnConnect(weak_ptr.get(), success);
+      auto* socket = weak_ptr.get();
+      if (socket) socket->event_listener_->OnConnect(socket, success);
   });
 }
 

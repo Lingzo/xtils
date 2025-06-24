@@ -66,7 +66,7 @@ class Logger {
                       const std::string& message);
 
   void addSink(std::unique_ptr<Sink> s);
-  
+
   void flush();
   void shutdown();
 
@@ -137,10 +137,10 @@ void _write_log(logger::Logger* log, const char* name,
 #define LogThis() LogI("======>> THIS <<=====")
 
 // Assertion and fatal error macros
-#define CHECK(expr, ...)                                     \
+#define CHECK(expr)                                          \
   do {                                                       \
     if (!(expr)) {                                           \
-      LogW("Assert -- " #expr " -- " #__VA_ARGS__);          \
+      LogW("Assert -- " #expr " -- ");                       \
       fprintf(stderr, "%s", xtils::GetStackTrace().c_str()); \
     }                                                        \
   } while (0)
