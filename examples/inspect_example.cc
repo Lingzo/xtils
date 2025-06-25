@@ -79,7 +79,8 @@ int main() {
   auto task_runner = ThreadTaskRunner::CreateAndStart("example");
 
   // Create and configure Inspect server
-  auto& inspect = Inspect::Create(&task_runner, 8080);
+  Inspect::Get().Init(&task_runner, "127.0.0.1", 9090);
+  auto& inspect = Inspect::Get();
 
   // Register routes using the new INSPECT_ROUTE macro
   INSPECT_ROUTE("/api/hello", "Returns a hello world message with request info",

@@ -93,8 +93,9 @@ class Inspect {
   };
 
   // Factory methods - Thread-safe singleton pattern
-  static Inspect& Create(TaskRunner* task_runner, int port = 8080);
   static Inspect& Get();
+  void Init(TaskRunner* task_runner, const std::string& ip = "127.0.0.1",
+            int port = 8080);
 
   /**
    * @brief Stops the Inspect server, freeing resources.
@@ -167,34 +168,27 @@ class Inspect {
 
  public:
   ~Inspect();
-
- private:
-  class Impl;
-  std::unique_ptr<Impl> impl_;
-
-  // Singleton management is now handled by InspectSingleton friend class
-  friend class InspectSingleton;
 };
 
 // Convenience macros for route registration
 
 // Register route with description - recommended for API documentation
-#define INSPECT_ROUTE(path, description, handler)                          \
-  do {                                                                     \
+#define INSPECT_ROUTE(path, description, handler)                           \
+  do {                                                                      \
     xtils::Inspect::Get().RouteWithDescription(path, description, handler); \
   } while (0)
 
 // Register static content
-#define INSPECT_STATIC(path, content, content_type)           \
-  do {                                                        \
+#define INSPECT_STATIC(path, content, content_type)            \
+  do {                                                         \
     xtils::Inspect::Get().Static(path, content, content_type); \
   } while (0)
 
 // Register combined HTTP and WebSocket handlers for the same path
-#define INSPECT_DUAL_ROUTE(path, description, http_handler, ws_handler)     \
-  do {                                                                      \
+#define INSPECT_DUAL_ROUTE(path, description, http_handler, ws_handler)      \
+  do {                                                                       \
     xtils::Inspect::Get().RouteWithHandlers(path, description, http_handler, \
-                                           ws_handler);                     \
+                                            ws_handler);                     \
   } while (0)
 
 // WebSocket publishing to all subscribers

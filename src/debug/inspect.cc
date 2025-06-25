@@ -1,6 +1,7 @@
 #include "xtils/debug/inspect.h"
 
 #include <algorithm>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -13,6 +14,7 @@
 #include "xtils/net/http_server.h"
 #include "xtils/tasks/task_runner.h"
 #include "xtils/utils/json.h"
+#include "xtils/utils/micros.h"
 #include "xtils/utils/string_utils.h"
 #include "xtils/utils/string_view.h"
 
@@ -97,6 +99,13 @@ std::map<std::string, std::string> getProcessStatusMap() {
 
 std::map<std::string, std::string> getSystemStatusMap() {
   std::map<std::string, std::string> result;
+  // system time
+  auto timestamp = std::time(nullptr);
+  result["sys_timestamp"] = std::to_string(timestamp);
+  std::tm* local_tm = std::localtime(&timestamp);
+  char buffer[64] = {0};
+  std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", local_tm);
+  result["sys_localtime"] = buffer;
   long clk_tck = sysconf(_SC_CLK_TCK);
 
   // System boot time
@@ -176,7 +185,7 @@ std::string Map2Text(const std::string& title,
   std::stringstream ss;
   ss << "=== " << title << " ===\n";
   for (const auto& [key, value] : m) {
-    ss << key << " : " << value << "\n";
+    ss << key << ": " << value << "\n";
   }
   ss << "\n";
   return ss.str();
@@ -185,19 +194,19 @@ std::string Map2Text(const std::string& title,
 namespace xtils {
 
 // Private implementation class
-class Inspect::Impl : public HttpRequestHandler {
+class Impl : public HttpRequestHandler {
  public:
-  Impl() : task_runner_(nullptr), port_(8080), started_(false) {}
+  Impl() {}
 
   ~Impl() { Stop(); }
 
-  void Initialize(TaskRunner* task_runner, int port) {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
+  void Init(TaskRunner* task_runner, const std::string& ip, int port) {
     task_runner_ = task_runner;
     port_ = port;
+    ip_ = ip;
     if (!started_ && task_runner_) {
       server_ = std::make_unique<HttpServer>(task_runner_, this);
-      server_->Start(port_);
+      server_->Start(ip, port);
       started_ = true;
 
       // Register default index route
@@ -217,6 +226,7 @@ class Inspect::Impl : public HttpRequestHandler {
       websocket_connections_.clear();
       connection_to_url_.clear();
       started_ = false;
+      server_.reset();
     }
   }
 
@@ -385,6 +395,7 @@ class Inspect::Impl : public HttpRequestHandler {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     xtils::Json info;
     info["port"] = port_;
+    info["ip"] = ip_;
     info["running"] = IsRunning();
     xtils::Json::array_t routes_array;
     for (const auto& pair : routes_) {
@@ -673,6 +684,7 @@ class Inspect::Impl : public HttpRequestHandler {
   std::unique_ptr<HttpServer> server_;
   TaskRunner* task_runner_;
   int port_;
+  std::string ip_;
   bool started_;
   std::string cors_origin_;
 
@@ -682,73 +694,40 @@ class Inspect::Impl : public HttpRequestHandler {
   std::map<HttpServerConnection*, std::string> connection_to_url_;
 };
 
-// Singleton management class
-class InspectSingleton {
- public:
-  static InspectSingleton& Instance() {
-    static InspectSingleton instance;
-    return instance;
-  }
-
-  Inspect& Create(TaskRunner* task_runner, int port) {
-    std::call_once(create_flag_, [this, task_runner, port]() {
-      instance_ = std::unique_ptr<Inspect>(new Inspect());
-      instance_->impl_->Initialize(task_runner, port);
-    });
-
-    if (!instance_) {
-      throw std::runtime_error("Failed to create Inspect instance");
-    }
-
-    return *instance_;
-  }
-
-  Inspect& Get() {
-    if (!instance_) {
-      throw std::runtime_error(
-          "Inspect instance not created. Call Create() first.");
-    }
-    return *instance_;
-  }
-
-  bool IsCreated() const { return instance_ != nullptr; }
-
- private:
-  mutable std::recursive_mutex mutex_;
-  std::unique_ptr<Inspect> instance_;
-  std::once_flag create_flag_{};
-};
-
+static Impl* impl_ = nullptr;
 // Inspect class implementation
-Inspect::Inspect() : impl_(std::make_unique<Impl>()) {}
+Inspect::Inspect() { impl_ = new Impl(); }
 
-Inspect::~Inspect() {
-  if (impl_) {
-    impl_->Stop();
-  }
+Inspect::~Inspect() { SAFE_DELETE_OBJ(impl_); }
+
+void Inspect::Init(TaskRunner* task_runner, const std::string& ip, int port) {
+  if (impl_) impl_->Init(task_runner, ip, port);
 }
 
-Inspect& Inspect::Create(TaskRunner* task_runner, int port) {
-  return InspectSingleton::Instance().Create(task_runner, port);
+Inspect& Inspect::Get() {
+  static Inspect ins;
+  return ins;
 }
-
-Inspect& Inspect::Get() { return InspectSingleton::Instance().Get(); }
 
 void Inspect::Stop() {
-  impl_->Stop();
-  impl_.reset();
+  if (impl_) impl_->Stop();
 }
 
-bool Inspect::IsRunning() const { return impl_->IsRunning(); }
+bool Inspect::IsRunning() const {
+  CHECK(impl_ != nullptr);
+  return impl_->IsRunning();
+}
 
 void Inspect::RouteWithDescription(const std::string& path,
                                    const std::string& description,
                                    Handler handler) {
+  CHECK(impl_ != nullptr);
   impl_->RegisterHandlerWithDescription(path, description, std::move(handler));
 }
 
 void Inspect::Static(const std::string& path, const std::string& content,
                      const std::string& content_type) {
+  CHECK(impl_ != nullptr);
   impl_->RegisterHandler(path,
                          [content, content_type](const Request&) -> Response {
                            return Response(content, content_type);
@@ -756,33 +735,40 @@ void Inspect::Static(const std::string& path, const std::string& content,
 }
 
 void Inspect::Unregister(const std::string& path) {
+  CHECK(impl_ != nullptr);
   impl_->UnregisterHandler(path);
 }
 
 bool Inspect::HasRoute(const std::string& path) const {
+  CHECK(impl_ != nullptr);
   return impl_->HasHandler(path);
 }
 
 size_t Inspect::Publish(const std::string& url, const std::string& message,
                         bool is_text) {
+  CHECK(impl_ != nullptr);
   return impl_->PublishEvent(url, message, is_text);
 }
 
 size_t Inspect::Publish(const std::string& url, const xtils::Json& json) {
+  CHECK(impl_ != nullptr);
   return impl_->PublishEvent(url, json.dump(), true);
 }
 
 Inspect::PublishResult Inspect::PublishWithResult(const std::string& url,
                                                   const std::string& message,
                                                   bool is_text) {
+  CHECK(impl_ != nullptr);
   return impl_->PublishEventWithResult(url, message, is_text);
 }
 
 bool Inspect::HasSubscribers(const std::string& url) const {
+  CHECK(impl_ != nullptr);
   return impl_->HasEventSubscribers(url);
 }
 
 size_t Inspect::GetSubscriberCount(const std::string& url) const {
+  CHECK(impl_ != nullptr);
   return impl_->GetEventSubscriberCount(url);
 }
 
@@ -820,10 +806,12 @@ Inspect::Response Inspect::NotFoundResponse(const std::string& message) {
 xtils::Json Inspect::GetServerInfo() const { return impl_->GetServerInfo(); }
 
 void Inspect::SetCORS(const std::string& allow_origin) {
+  CHECK(impl_ != nullptr);
   impl_->SetCORS(allow_origin);
 }
 
 std::vector<std::string> Inspect::GetRoutes() const {
+  CHECK(impl_ != nullptr);
   return impl_->GetHandlerPaths();
 }
 
@@ -831,15 +819,18 @@ void Inspect::RouteWithHandlers(const std::string& path,
                                 const std::string& description,
                                 Handler http_handler,
                                 WebSocketHandler ws_handler) {
+  CHECK(impl_ != nullptr);
   impl_->RegisterHandlersWithDescription(path, description, http_handler,
                                          ws_handler);
 }
 
 bool Inspect::HasWebSocketRoute(const std::string& path) const {
+  CHECK(impl_ != nullptr);
   return impl_->HasWebSocketHandler(path);
 }
 
 std::vector<std::string> Inspect::GetWebSocketRoutes() const {
+  CHECK(impl_ != nullptr);
   return impl_->GetWebSocketHandlerPaths();
 }
 

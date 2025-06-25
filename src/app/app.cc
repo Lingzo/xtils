@@ -83,7 +83,7 @@ void App::init_inspect() {
     int port = conf().get_int("xtils.inspect.port");
     std::string cors = conf().get_string("xtils.inspect.cors");
 
-    Inspect::Create(tg_->random(), port);
+    Inspect::Get().Init(tg_->random(), addr, port);
     Inspect::Get().SetCORS(cors);
     LogI("inspect url http://%s:%d, cors: %s", addr.c_str(), port,
          cors.c_str());

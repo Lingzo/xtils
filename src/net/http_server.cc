@@ -37,8 +37,8 @@ HttpServer::HttpServer(TaskRunner* task_runner, HttpRequestHandler* req_handler)
     : task_runner_(task_runner), req_handler_(req_handler) {}
 HttpServer::~HttpServer() { Stop(); }
 
-void HttpServer::Start(int port) {
-  std::string ipv4_addr = "127.0.0.1:" + std::to_string(port);
+void HttpServer::Start(const std::string& ip, int port) {
+  std::string ipv4_addr = ip + ":" + std::to_string(port);
   sock4_ = UnixSocket::Listen(ipv4_addr, this, task_runner_, SockFamily::kInet,
                               SockType::kStream);
   bool ipv4_listening = sock4_ && sock4_->is_listening();
