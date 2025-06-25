@@ -4,11 +4,9 @@
 #include <sys/types.h>
 
 #include <memory>
-#include <shared_mutex>
 #include <string>
 #include <utility>
 
-#include "xtils/logging/logger.h"
 #include "xtils/tasks/task_runner.h"
 #include "xtils/utils/scoped.h"
 #include "xtils/utils/weak_ptr.h"

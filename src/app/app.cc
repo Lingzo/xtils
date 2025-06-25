@@ -78,13 +78,8 @@ void App::init(int argc, char* argv[]) {
     exit(1);
   }
 
-  // Print configuration if verbose mode is enabled
-  if (config_.get_bool("verbose", false)) {
-    config_.print();
-  }
-
   // init thread pool
-  int threads_size = conf().get_int("xtils.threads", 4);
+  int threads_size = conf().get_int("xtils.threads");
   CHECK(threads_size > 1);
   tg_ = std::make_unique<TaskGroup>(threads_size);
   em_ = std::make_unique<EventManager>(*tg_);
@@ -154,7 +149,7 @@ void App::run() {
 }
 
 void App::deinit() {
-  if (conf().get_bool("xtils.inspect.enable", true)) {
+  if (conf().get_bool("xtils.inspect.enable")) {
     Inspect::Get().Stop();
   }
   for (auto& p : service_) {

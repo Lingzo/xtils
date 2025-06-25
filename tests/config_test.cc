@@ -101,10 +101,10 @@ void test_basic_getters() {
   assert(config.get_bool("test.bool") == true);
 
   // Test with default values
-  assert(config.get_string("nonexistent", "default") == "default");
-  assert(config.get_int("nonexistent", 999) == 999);
-  assert(config.get_double("nonexistent", 1.23) == 1.23);
-  assert(config.get_bool("nonexistent", false) == false);
+  assert(config.get_string("nonexistent") == "default");
+  assert(config.get_int("nonexistent") == 999);
+  assert(config.get_double("nonexistent") == 1.23);
+  assert(config.get_bool("nonexistent") == false);
 }
 
 void test_template_getters() {
@@ -116,16 +116,16 @@ void test_template_getters() {
   config.set("val4", true);
 
   // Test template get method
-  assert(config.get<int>("val1", 0) == 100);
-  assert(config.get<double>("val2", 0.0) == 2.5);
-  assert(config.get<std::string>("val3", "") == "test");
-  assert(config.get<bool>("val4", false) == true);
+  assert(config.get<int>("val1") == 100);
+  assert(config.get<double>("val2") == 2.5);
+  assert(config.get<std::string>("val3") == "test");
+  assert(config.get<bool>("val4") == true);
 
   // Test type conversion
-  assert(config.get<double>("val1", 0.0) == 100.0);  // int to double
+  assert(config.get<double>("val1") == 100.0);  // int to double
   // Note: 2.5 as double should remain 2.5, not convert to int automatically
   // Test the actual stored value
-  assert(config.get<double>("val2", 0.0) == 2.5);
+  assert(config.get<double>("val2") == 2.5);
 }
 
 void test_template_setters() {
@@ -465,7 +465,7 @@ void test_type_conversions() {
   // JSON values, not from float JSON values. So get_int on a float value
   // returns the default (0). This is the current behavior - if we stored 99.9
   // as a float, get_int returns default
-  assert(config.get_int("double_to_int", -1) ==
+  assert(config.get_int("double_to_int") ==
          -1);  // Should return default since it's stored as float
 
   // Test that we can explicitly convert using templates
@@ -546,9 +546,9 @@ void test_error_handling() {
   assert(!optional_val.has_value());
 
   // Test default values for non-existent keys
-  assert(config.get_string("missing.key", "default") == "default");
-  assert(config.get_int("missing.key", 42) == 42);
-  assert(config.get_bool("missing.key", true) == true);
+  assert(config.get_string("missing.key") == "default");
+  assert(config.get_int("missing.key") == 42);
+  assert(config.get_bool("missing.key") == true);
 }
 
 void test_print_method() {

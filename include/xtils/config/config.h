@@ -1,7 +1,9 @@
 #pragma once
 
+#include <exception>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -47,14 +49,13 @@ class Config {
 
   // Primary access method with dot notation support (e.g., "server.port")
   template <typename T>
-  T get(const std::string& path, const T& default_value = T{}) const;
+  T get(const std::string& path) const;
 
   // Specialized getters for common types
-  std::string get_string(const std::string& path,
-                         const std::string& default_value = "") const;
-  int64_t get_int(const std::string& path, int64_t default_value = 0) const;
-  double get_double(const std::string& path, double default_value = 0.0) const;
-  bool get_bool(const std::string& path, bool default_value = false) const;
+  std::string get_string(const std::string& path) const;
+  int64_t get_int(const std::string& path) const;
+  double get_double(const std::string& path) const;
+  bool get_bool(const std::string& path) const;
   std::optional<Json> get(const std::string& path) const;
 
   // Utility methods
@@ -90,33 +91,38 @@ class Config {
 
 // Template implementation
 template <typename T>
-T Config::get(const std::string& path, const T& default_value) const {
+T Config::get(const std::string& path) const {
   auto json_val = get(path);
   if (!json_val) {
-    return default_value;
+    throw std::runtime_error("key not find");
   }
 
   try {
     if constexpr (std::is_same_v<T, std::string>) {
-      return json_val->is_string() ? json_val->as_string() : default_value;
+      return json_val->is_string()
+                 ? json_val->as_string()
+                 : throw std::runtime_error("value not string");
     } else if constexpr (std::is_same_v<T, int64_t>) {
-      return json_val->is_integer() ? json_val->as_integer() : default_value;
+      return json_val->is_integer()
+                 ? json_val->as_integer()
+                 : throw std::runtime_error("value not integer");
     } else if constexpr (std::is_same_v<T, double>) {
       if (json_val->is_float()) return json_val->as_float();
       if (json_val->is_integer())
         return static_cast<double>(json_val->as_integer());
-      return default_value;
     } else if constexpr (std::is_same_v<T, bool>) {
-      return json_val->is_bool() ? json_val->as_bool() : default_value;
+      return json_val->is_bool() ? json_val->as_bool()
+                                 : throw std::runtime_error("value not bool");
     } else if constexpr (std::is_integral_v<T>) {
-      return json_val->is_integer() ? static_cast<T>(json_val->as_integer())
-                                    : default_value;
+      return json_val->is_integer()
+                 ? static_cast<T>(json_val->as_integer())
+                 : throw std::runtime_error("value not integral");
     } else if constexpr (std::is_floating_point_v<T>) {
       if (json_val->is_float()) return static_cast<T>(json_val->as_float());
       if (json_val->is_integer()) return static_cast<T>(json_val->as_integer());
-      return default_value;
+      throw std::runtime_error("value not float");
     } else if constexpr (std::is_same_v<T, std::vector<int64_t>>) {
-      if (!json_val->is_array()) return default_value;
+      if (!json_val->is_array()) throw std::runtime_error("value not a array");
       std::vector<int64_t> result;
       auto array = json_val->as_array();
       for (const auto& val : array) {
@@ -128,7 +134,7 @@ T Config::get(const std::string& path, const T& default_value) const {
       }
       return result;
     } else if constexpr (std::is_same_v<T, std::vector<double>>) {
-      if (!json_val->is_array()) return default_value;
+      if (!json_val->is_array()) throw std::runtime_error("value not a array");
       std::vector<double> result;
       auto array = json_val->as_array();
       for (const auto& val : array) {
@@ -140,7 +146,7 @@ T Config::get(const std::string& path, const T& default_value) const {
       }
       return result;
     } else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
-      if (!json_val->is_array()) return default_value;
+      if (!json_val->is_array()) throw std::runtime_error("value not a array");
       std::vector<std::string> result;
       auto array = json_val->as_array();
       for (const auto& val : array) {
@@ -150,7 +156,7 @@ T Config::get(const std::string& path, const T& default_value) const {
       }
       return result;
     } else if constexpr (std::is_same_v<T, std::vector<int>>) {
-      if (!json_val->is_array()) return default_value;
+      if (!json_val->is_array()) throw std::runtime_error("value not a array");
       std::vector<int> result;
       auto array = json_val->as_array();
       for (const auto& val : array) {
@@ -162,7 +168,7 @@ T Config::get(const std::string& path, const T& default_value) const {
       }
       return result;
     } else if constexpr (std::is_same_v<T, std::vector<float>>) {
-      if (!json_val->is_array()) return default_value;
+      if (!json_val->is_array()) throw std::runtime_error("value not a array");
       std::vector<float> result;
       auto array = json_val->as_array();
       for (const auto& val : array) {
@@ -186,11 +192,13 @@ T Config::get(const std::string& path, const T& default_value) const {
               std::is_same_v<T, std::vector<int>> ||
               std::is_same_v<T, std::vector<float>> || std::is_same_v<T, Json>,
           "Unsupported type for Config::get");
-      return default_value;
+      throw std::runtime_error("value not a array");
     }
-  } catch (...) {
-    return default_value;
+  } catch (const std::exception e) {
+    throw e;
   }
+  // can't be here
+  return T{};
 }
 
 // Template implementation for define with native types

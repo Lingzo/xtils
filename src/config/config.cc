@@ -156,22 +156,19 @@ bool Config::parse_json(const std::string& json_content) {
   return validate();
 }
 
-std::string Config::get_string(const std::string& path,
-                               const std::string& default_value) const {
-  return get<std::string>(path, default_value);
+std::string Config::get_string(const std::string& path) const {
+  return get<std::string>(path);
 }
 
-int64_t Config::get_int(const std::string& path, int64_t default_value) const {
-  return get<int64_t>(path, default_value);
+int64_t Config::get_int(const std::string& path) const {
+  return get<int64_t>(path);
 }
 
-double Config::get_double(const std::string& path, double default_value) const {
-  return get<double>(path, default_value);
+double Config::get_double(const std::string& path) const {
+  return get<double>(path);
 }
 
-bool Config::get_bool(const std::string& path, bool default_value) const {
-  return get<bool>(path, default_value);
-}
+bool Config::get_bool(const std::string& path) const { return get<bool>(path); }
 
 bool Config::has(const std::string& path) const {
   return get(path).has_value();

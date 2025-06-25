@@ -7,7 +7,6 @@
 #include "xtils/config/config.h"
 #include "xtils/tasks/event.h"
 #include "xtils/tasks/task_group.h"
-#include "xtils/tasks/task_runner.h"
 
 namespace xtils {
 using Task = std::function<void()>;
@@ -27,17 +26,6 @@ class App {
     return p;
   }
   void registor(std::shared_ptr<Service> p) { service_.emplace_back(p); }
-  void remove(std::shared_ptr<Service> p) {
-    if (p) {
-      for (auto it = service_.begin(); it != service_.end();) {
-        if (p.get() == it->get()) {
-          it = service_.erase(it);
-        } else {
-          it++;
-        }
-      }
-    }
-  }
   void PostTask(Task task);
   void PostAsyncTask(Task task, Task main = nullptr);
 

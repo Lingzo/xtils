@@ -35,7 +35,7 @@ namespace fsm {
 
 // Type definitions
 using EventType = std::int32_t;
-using StateId = std::size_t;
+using StateId = std::int32_t;
 
 // Forward declarations
 class State;
