@@ -440,7 +440,7 @@ class Inspect::Impl : public HttpRequestHandler {
       for (const auto& pair : routes_) {
         if (pair.second.http_handler) {
           std::string item =
-              R"(<li><a href="{{URL}}">{{URL}}</a> - {{DESC}}</li>)";
+              R"(<li><a href="{{URL}}">{{URL}}</a> {{DESC}}</li>)";
           ReplaceAll(item, "{{URL}}", pair.first);
           if (!pair.second.description.empty()) {
             ReplaceAll(item, "{{DESC}}", pair.second.description);
@@ -464,6 +464,7 @@ class Inspect::Impl : public HttpRequestHandler {
           <html>
           <head>
           <title>Inspect Server</title>
+          <meta http-equiv="refresh" content="10">
           <meta charset="UTF-8">
           </head>
           <body>
