@@ -20,8 +20,10 @@ target_compile_options(xtils PUBLIC
     $<$<CONFIG:Release>:-O2 -DNDEBUG>
     $<$<CONFIG:RelWithDebInfo>:-O2 -g -DNDEBUG>
     $<$<CONFIG:MinSizeRel>:-Os -DNDEBUG>)
-#target_link_options(xtils PUBLIC 
-#    $<$<CONFIG:Debug>:-fsanitize=address>)
+target_link_options(xtils PUBLIC 
+    $<$<CONFIG:Debug>:-rdynamic>
+    $<$<CONFIG:Release>:-rdynamic>
+    $<$<CONFIG:RelWithDebInfo>:-rdynamic>)
 
 add_subdirectory(tests)
 add_subdirectory(examples)

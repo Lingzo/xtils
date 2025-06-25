@@ -24,6 +24,11 @@ class SimpleService : public xtils::Service {
       std::this_thread::sleep_for(std::chrono::seconds(5));
       ctx->PostAsyncTask([this, e]() { ctx->emit(e); });
     });
+
+    ctx->PostAsyncTask([] {
+      std::this_thread::sleep_for(std::chrono::seconds(3));
+      LogThis();
+    });
   }
 
   void deinit() override { LogI("Deinit"); }

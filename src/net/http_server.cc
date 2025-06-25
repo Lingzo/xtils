@@ -43,7 +43,7 @@ void HttpServer::Start(int port) {
                               SockType::kStream);
   bool ipv4_listening = sock4_ && sock4_->is_listening();
   if (!ipv4_listening) {
-    LogI("Failed to listen on IPv4 socket: \"%s\"", ipv4_addr.c_str());
+    LogE("Failed to listen on IPv4 socket: \"%s\"", ipv4_addr.c_str());
     sock4_.reset();
   }
 }

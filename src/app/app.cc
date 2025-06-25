@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <csignal>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -13,29 +12,11 @@
 #include "xtils/debug/inspect.h"
 #include "xtils/logging/logger.h"
 #include "xtils/logging/sink.h"
+#include "xtils/system/signal_handler.h"
 #include "xtils/tasks/event.h"
 #include "xtils/tasks/task_group.h"
 
 namespace xtils {
-
-namespace {
-std::atomic<bool> g_shutdown_requested{false};
-
-void SignalHandler(int signal) {
-  std::cout << "Received signal " << signal << ", shutting down..."
-            << std::endl;
-  g_shutdown_requested.store(true);
-}
-
-void SetupSignalHandlers() {
-  std::signal(SIGINT, SignalHandler);
-  std::signal(SIGTERM, SignalHandler);
-#ifdef SIGQUIT
-  std::signal(SIGQUIT, SignalHandler);
-#endif
-}
-
-}  // namespace
 
 App::App() { default_config(); }
 
@@ -58,7 +39,7 @@ void App::default_config() {
 
 void App::init(int argc, char* argv[]) {
   // Setup signal handlers for graceful shutdown
-  SetupSignalHandlers();
+  system::SignalHandler::Initialize();
 
   // Parse command line arguments and load configuration
   if (!config_.parse_args(argc, argv)) {
@@ -104,7 +85,7 @@ void App::init_inspect() {
 
     Inspect::Create(tg_->random(), port);
     Inspect::Get().SetCORS(cors);
-    LogI("Start Inspect, http://%s:%d, cors: %s", addr.c_str(), port,
+    LogI("inspect url http://%s:%d, cors: %s", addr.c_str(), port,
          cors.c_str());
   }
 
@@ -131,7 +112,7 @@ void App::run() {
     return std::chrono::steady_clock::now().time_since_epoch().count();
   };
   std::atomic_int64_t t1 = now();
-  while (!g_shutdown_requested) {
+  while (!system::SignalHandler::IsShutdownRequested()) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
     PostTask([&t1, now]() { t1 = now(); });
     double ms = (now() - t1) / 1e6;
@@ -141,7 +122,6 @@ void App::run() {
       LogI("Main Running");
     }
   }
-
   running_ = false;
   LogI("App shutting down...");
   deinit();
@@ -157,6 +137,9 @@ void App::deinit() {
   }
   em_.reset();
   tg_.reset();  // must be last
+
+  // Cleanup signal handlers
+  system::SignalHandler::Cleanup();
 }
 
 void App::PostTask(std::function<void()> task) { tg_->PostTask(task); }

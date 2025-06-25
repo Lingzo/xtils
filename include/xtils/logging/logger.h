@@ -21,6 +21,7 @@
 #include <string>
 
 #include "xtils/logging/sink.h"
+#include "xtils/system/signal_handler.h"
 
 #ifndef LOG_TAG_STRING
 #define LOG_TAG_STRING "default"
@@ -95,10 +96,6 @@ constexpr const char* get_filename(const char* path) {
   return last_slash;
 }
 
-namespace xtils {
-inline std::string GetStackTrace() { return {}; }
-}  // namespace xtils
-
 // Core logging function - implemented in logger.cc
 void _write_log(logger::Logger* log, const char* name,
                 const logger::source_loc& lc, logger::log_level level,
@@ -137,12 +134,13 @@ void _write_log(logger::Logger* log, const char* name,
 #define LogThis() LogI("======>> THIS <<=====")
 
 // Assertion and fatal error macros
-#define CHECK(expr)                                          \
-  do {                                                       \
-    if (!(expr)) {                                           \
-      LogW("Assert -- " #expr " -- ");                       \
-      fprintf(stderr, "%s", xtils::GetStackTrace().c_str()); \
-    }                                                        \
+#define CHECK(expr)                                 \
+  do {                                              \
+    if (!(expr)) {                                  \
+      LogE("Assert -- " #expr " -- \n%s",           \
+           xtils::system::GetStackTrace().c_str()); \
+      xtils::system::SignalHandler::Shutdown();     \
+    }                                               \
   } while (0)
 
 #define DCHECK(expr) CHECK(expr)

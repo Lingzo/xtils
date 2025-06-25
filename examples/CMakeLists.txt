@@ -10,10 +10,6 @@ function(add_example name source)
         xtils
         Threads::Threads
     )
-    target_compile_options(${name} PRIVATE
-        -Wall -Wextra -Wpedantic
-    )
-
     # Set output directory
     set_target_properties(${name} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples
