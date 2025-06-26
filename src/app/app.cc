@@ -15,6 +15,7 @@
 #include "xtils/system/signal_handler.h"
 #include "xtils/tasks/event.h"
 #include "xtils/tasks/task_group.h"
+#include "xtils/utils/file_utils.h"
 
 namespace xtils {
 
@@ -31,9 +32,13 @@ void App::default_config() {
       .define("xtils.inspect.addr", "inspect address", "127.0.0.1")
       .define("xtils.inspect.cors", "inspect cross addr", "*")
       .define("xtils.log.file.name", "log file name,default in current dir",
-              "app.log")
+              "./app.log")
+      .define("xtils.log.file.max_bytes", "log file size, default 4M",
+              4 * 1024 * 1024)
+      .define("xtils.log.file.max_items", "max file number, app.max.log", 5)
       .define("xtils.log.file.enable", "log to file or not", true)
-      .define("xtils.log.level", "log level", 1)
+      .define("xtils.log.level",
+              "log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error", 1)
       .define("xtils.log.console.enable", "log to console or not", true);
 }
 
@@ -71,10 +76,28 @@ void App::init(int argc, char* argv[]) {
 void App::init_log() {
   if (conf().get_bool("xtils.log.console.enable")) {
     logger::default_logger()->addSink(std::make_unique<logger::ConsoleSink>());
-    int log_level = conf().get_int("xtils.log.level");
-    CHECK(log_level < logger::MAX);
-    logger::set_level(logger::default_logger(), (logger::log_level)log_level);
   }
+  if (conf().get_bool("xtils.log.file.enable")) {
+    std::string file = conf().get_string("xtils.log.file.name");
+    int max_bytes = conf().get_int("xtils.log.file.max_bytes");
+    int max_items = conf().get_int("xtils.log.file.max_items");
+    if (!file_utils::exists(file)) {
+      LogI("%s == ", file_utils::dirname(file).c_str());
+      bool create_dir = file_utils::mkdir(file_utils::dirname(file));
+      if (!create_dir) {
+        LogE("can't open log file, %s", file.c_str());
+      } else {
+        logger::default_logger()->addSink(
+            std::make_unique<logger::FileSink>(file, max_bytes, max_items));
+      }
+    } else {
+      logger::default_logger()->addSink(
+          std::make_unique<logger::FileSink>(file, max_bytes, max_items));
+    }
+  }
+  int log_level = conf().get_int("xtils.log.level");
+  CHECK(log_level < logger::MAX);
+  logger::set_level(logger::default_logger(), (logger::log_level)log_level);
 }
 
 void App::init_inspect() {

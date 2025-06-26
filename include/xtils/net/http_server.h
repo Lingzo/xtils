@@ -156,7 +156,7 @@ class HttpServer : public UnixSocket::EventListener {
  public:
   HttpServer(TaskRunner*, HttpRequestHandler*);
   ~HttpServer() override;
-  void Start(const std::string& ip, int port);
+  bool Start(const std::string& ip, int port);
   void Stop();
   void AddAllowedOrigin(const std::string&);
 

@@ -37,7 +37,7 @@ HttpServer::HttpServer(TaskRunner* task_runner, HttpRequestHandler* req_handler)
     : task_runner_(task_runner), req_handler_(req_handler) {}
 HttpServer::~HttpServer() { Stop(); }
 
-void HttpServer::Start(const std::string& ip, int port) {
+bool HttpServer::Start(const std::string& ip, int port) {
   std::string ipv4_addr = ip + ":" + std::to_string(port);
   sock4_ = UnixSocket::Listen(ipv4_addr, this, task_runner_, SockFamily::kInet,
                               SockType::kStream);
@@ -45,7 +45,9 @@ void HttpServer::Start(const std::string& ip, int port) {
   if (!ipv4_listening) {
     LogE("Failed to listen on IPv4 socket: \"%s\"", ipv4_addr.c_str());
     sock4_.reset();
+    return false;
   }
+  return true;
 }
 
 void HttpServer::AddAllowedOrigin(const std::string& origin) {

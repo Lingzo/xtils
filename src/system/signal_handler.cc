@@ -165,8 +165,8 @@ void SignalHandler::Cleanup() {
 
 void SignalHandler::HandleShutdownSignal(int sig, siginfo_t* info,
                                          void* context) {
-  std::cout << "Received shutdown signal " << GetSignalName(sig) << " (" << sig
-            << "), shutting down..." << std::endl;
+  LogW("Received shutdown signal %s (%d), shutting down...", GetSignalName(sig),
+       sig);
 
   if (shutdown_requested_) return;
   shutdown_requested_.store(true);

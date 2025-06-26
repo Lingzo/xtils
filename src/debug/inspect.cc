@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <ctime>
-#include <filesystem>
-#include <fstream>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -13,13 +11,13 @@
 #include "xtils/logging/logger.h"
 #include "xtils/net/http_server.h"
 #include "xtils/tasks/task_runner.h"
+#include "xtils/utils/file_utils.h"
 #include "xtils/utils/json.h"
 #include "xtils/utils/micros.h"
 #include "xtils/utils/string_utils.h"
 #include "xtils/utils/string_view.h"
 
 namespace {
-namespace fs = std::filesystem;
 std::string formatSeconds(uint64_t seconds) {
   uint64_t days = seconds / 86400;
   seconds %= 86400;
@@ -28,12 +26,12 @@ std::string formatSeconds(uint64_t seconds) {
   uint64_t minutes = seconds / 60;
   seconds %= 60;
 
-  std::ostringstream oss;
-  if (days > 0) oss << days << "d ";
-  if (hours > 0) oss << hours << "h ";
-  if (minutes > 0) oss << minutes << "m ";
-  oss << seconds << "s";
-  return oss.str();
+  std::stringstream ss;
+  if (days > 0) ss << days << "d ";
+  if (hours > 0) ss << hours << "h ";
+  if (minutes > 0) ss << minutes << "m ";
+  ss << seconds << "s";
+  return ss.str();
 }
 std::map<std::string, std::string> getProcessStatusMap() {
   std::map<std::string, std::string> result;
@@ -42,19 +40,20 @@ std::map<std::string, std::string> getProcessStatusMap() {
   // uptime
   double uptime_seconds = 0.0;
   {
-    std::ifstream uptime_file("/proc/uptime");
-    uptime_file >> uptime_seconds;
+    std::string line;
+    file_utils::read("/proc/uptime", &line);
+    std::stringstream ss(line);
+    ss >> uptime_seconds;
   }
 
   // /proc/self/stat
   {
-    std::ifstream stat_file("/proc/self/stat");
     std::string line;
-    std::getline(stat_file, line);
-    std::istringstream iss(line);
+    file_utils::read("/proc/self/stat", &line);
+    std::stringstream ss(line);
     std::vector<std::string> stats;
     std::string token;
-    while (iss >> token) stats.push_back(token);
+    while (ss >> token) stats.push_back(token);
 
     long start_time_ticks = std::stol(stats[21]);
     double start_time_sec_ago =
@@ -69,24 +68,23 @@ std::map<std::string, std::string> getProcessStatusMap() {
   }
 
   try {
-    size_t fd_count = std::distance(fs::directory_iterator("/proc/self/fd"),
-                                    fs::directory_iterator{});
+    size_t fd_count = file_utils::list_files("/proc/self/fd").size();
     result["fd_count"] = std::to_string(fd_count);
   } catch (...) {
     result["fd_count"] = "error";
   }
 
   {
-    std::ifstream io_file("/proc/self/io");
-    std::string line;
-    while (std::getline(io_file, line)) {
+    std::vector<std::string> lines;
+    file_utils::read_lines("/proc/self/io", &lines);
+    for (auto& line : lines) {
       if (line.find("read_bytes:") == 0) {
-        std::istringstream iss(line.substr(11));
+        std::stringstream iss(line.substr(11));
         uint64_t read_bytes;
         iss >> read_bytes;
         result["io_read_bytes"] = std::to_string(read_bytes);
       } else if (line.find("write_bytes:") == 0) {
-        std::istringstream iss(line.substr(12));
+        std::stringstream iss(line.substr(12));
         uint64_t write_bytes;
         iss >> write_bytes;
         result["io_write_bytes"] = std::to_string(write_bytes);
@@ -110,9 +108,9 @@ std::map<std::string, std::string> getSystemStatusMap() {
 
   // System boot time
   {
-    std::ifstream stat_file("/proc/stat");
-    std::string line;
-    while (std::getline(stat_file, line)) {
+    std::vector<std::string> lines;
+    file_utils::read_lines("/proc/stat", &lines);
+    for (auto& line : lines) {
       if (line.rfind("btime ", 0) == 0) {
         std::istringstream iss(line.substr(6));
         time_t boot_time;
@@ -123,18 +121,14 @@ std::map<std::string, std::string> getSystemStatusMap() {
         break;
       }
     }
-  }
 
-  // CPU time
-  {
-    std::ifstream stat_file("/proc/stat");
-    std::string line;
-    while (std::getline(stat_file, line)) {
+    // CPU time
+    for (auto& line : lines) {
       if (line.rfind("cpu ", 0) == 0) {
-        std::istringstream iss(line);
+        std::stringstream ss(line);
         std::string label;
         uint64_t user, nice, system, idle, iowait, irq, softirq, steal;
-        iss >> label >> user >> nice >> system >> idle >> iowait >> irq >>
+        ss >> label >> user >> nice >> system >> idle >> iowait >> irq >>
             softirq >> steal;
         uint64_t total_jiffies =
             user + nice + system + idle + iowait + irq + softirq + steal;
@@ -152,9 +146,11 @@ std::map<std::string, std::string> getSystemStatusMap() {
 
   // Load average
   {
-    std::ifstream load_file("/proc/loadavg");
+    std::string line;
+    file_utils::read("/proc/loadavg", &line);
+    std::stringstream ss(line);
     double l1, l5, l15;
-    load_file >> l1 >> l5 >> l15;
+    ss >> l1 >> l5 >> l15;
     result["load_avg_1min"] = std::to_string(l1);
     result["load_avg_5min"] = std::to_string(l5);
     result["load_avg_15min"] = std::to_string(l15);
@@ -162,16 +158,16 @@ std::map<std::string, std::string> getSystemStatusMap() {
 
   // Memory info
   {
-    std::ifstream mem_file("/proc/meminfo");
-    std::string line;
+    std::vector<std::string> lines;
+    file_utils::read_lines("/proc/meminfo", &lines);
     size_t mem_total = 0, mem_available = 0;
-    while (std::getline(mem_file, line)) {
+    for (auto& line : lines) {
       if (line.find("MemTotal:") == 0) {
-        std::istringstream iss(line.substr(9));
-        iss >> mem_total;
+        std::stringstream ss(line.substr(9));
+        ss >> mem_total;
       } else if (line.find("MemAvailable:") == 0) {
-        std::istringstream iss(line.substr(13));
-        iss >> mem_available;
+        std::stringstream ss(line.substr(13));
+        ss >> mem_available;
       }
     }
     result["memory_total_kb"] = std::to_string(mem_total);
@@ -180,6 +176,7 @@ std::map<std::string, std::string> getSystemStatusMap() {
 
   return result;
 }
+
 std::string Map2Text(const std::string& title,
                      const std::map<std::string, std::string>& m) {
   std::stringstream ss;
@@ -206,8 +203,7 @@ class Impl : public HttpRequestHandler {
     ip_ = ip;
     if (!started_ && task_runner_) {
       server_ = std::make_unique<HttpServer>(task_runner_, this);
-      server_->Start(ip, port);
-      started_ = true;
+      started_ = server_->Start(ip, port);
 
       // Register default index route
       RegisterHandler("/",

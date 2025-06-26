@@ -5,6 +5,8 @@
 #include <iostream>
 #include <sstream>
 
+#include "xtils/logging/logger.h"
+
 namespace xtils {
 
 // Helper function for C++17 compatibility (starts_with is C++20)
@@ -31,24 +33,22 @@ bool Config::parse_args(int argc, char* argv[]) {
 
   // First pass: look for --config-file parameter
   std::string config_file;
-  for (int i = 1; i < argc; ++i) {
+  for (int i = 1; i < argc; ++i) {  // suport mutil config file
     std::string arg = argv[i];
 
     if (arg == "--config-file" && i + 1 < argc) {
       config_file = argv[i + 1];
-      break;
     } else if (starts_with(arg, "--config-file=")) {
       config_file = arg.substr(14);  // length of "--config-file="
-      break;
     }
-  }
-
-  // Load config file if specified
-  if (!config_file.empty()) {
-    if (!load_file(config_file)) {
-      std::cerr << "Failed to load config file: " << config_file << std::endl;
-      return false;
+    // Load config file if specified
+    if (!config_file.empty()) {
+      if (!load_file(config_file)) {
+        LogE("Failed to load config file: %s", config_file.c_str());
+        return false;
+      }
     }
+    config_file.clear();
   }
 
   // Second pass: process all command line arguments
@@ -93,13 +93,13 @@ bool Config::parse_args(int argc, char* argv[]) {
     }
 
     if (key.empty()) {
-      std::cerr << "Unknown argument: " << arg << std::endl;
+      LogE("Unknown argument: %s", arg.c_str());
       return false;
     }
 
     auto option_it = options_.find(key);
     if (option_it == options_.end()) {
-      std::cerr << "Unknown option: " << key << std::endl;
+      LogE("Unknown option: %s", key.c_str());
       return false;
     }
 
@@ -107,14 +107,14 @@ bool Config::parse_args(int argc, char* argv[]) {
     if (!has_value && option_it->second.default_value.is_bool()) {
       set(key, Json(true));
     } else if (!has_value) {
-      std::cerr << "Option " << key << " requires a value" << std::endl;
+      LogE("Option %s requires a value", key.c_str());
       return false;
     } else {
       auto parsed_value =
           parse_value(value_str, option_it->second.default_value);
       if (!parsed_value) {
-        std::cerr << "Invalid value for option " << key << ": " << value_str
-                  << std::endl;
+        LogE("Invalid value for option %s : %s", key.c_str(),
+             value_str.c_str());
         return false;
       }
       set(key, parsed_value.value());
@@ -127,7 +127,7 @@ bool Config::parse_args(int argc, char* argv[]) {
 bool Config::load_file(const std::string& filename) {
   std::ifstream file(filename);
   if (!file.is_open()) {
-    std::cerr << "Failed to open config file: " << filename << std::endl;
+    LogE("Failed to open config file: %s", filename.c_str());
     return false;
   }
 
@@ -141,7 +141,7 @@ bool Config::load_file(const std::string& filename) {
 bool Config::parse_json(const std::string& json_content) {
   auto json = Json::parse(json_content);
   if (!json) {
-    std::cerr << "Failed to parse JSON configuration" << std::endl;
+    LogE("Failed to parse JSON configuration");
     return false;
   }
 
@@ -210,12 +210,13 @@ void Config::set(const std::string& path, const Json& value) {
 bool Config::validate() const {
   auto missing = missing_required();
   if (!missing.empty()) {
-    std::cerr << "Missing required options: ";
+    std::stringstream ss;
+    ss << "Missing required options: ";
     for (size_t i = 0; i < missing.size(); ++i) {
-      std::cerr << missing[i];
-      if (i < missing.size() - 1) std::cerr << ", ";
+      ss << missing[i];
+      if (i < missing.size() - 1) ss << ", ";
     }
-    std::cerr << std::endl;
+    LogE("%s", ss.str().c_str());
     return false;
   }
   return true;
@@ -272,7 +273,7 @@ Json Config::to_json() const { return data_; }
 bool Config::save(const std::string& filename) const {
   std::ofstream file(filename);
   if (!file.is_open()) {
-    std::cerr << "Failed to create config file: " << filename << std::endl;
+    LogE("Failed to create config file: %s", filename.c_str());
     return false;
   }
 

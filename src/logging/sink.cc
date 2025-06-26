@@ -18,7 +18,8 @@
 
 #include <cassert>
 #include <cstdio>
-#include <filesystem>
+
+#include "xtils/utils/file_utils.h"
 
 namespace logger {
 
@@ -61,20 +62,26 @@ class FileSink::Impl {
     int fd = fileno(logger_file_);
     fsync(fd);
     fclose(logger_file_);
-    namespace fs = std::filesystem;
+    namespace fs = file_utils;
+    const std::string abs_path = fs::absolute_path(name_);
+    const std::string stem = fs::stem(name_);
+    const std::string extension = fs::extension(name_);
+    const std::string prefix = fs::join_path(abs_path, stem) + ".";
+    const std::string suffix = "." + extension;
     if (max_items_ > 0) {
-      auto oldFile = name_ + "." + std::to_string(max_items_);
-      if (fs::exists(oldFile)) fs::remove(oldFile);
+      auto oldFile = fs::join_path(abs_path, stem) + "." +
+                     std::to_string(max_items_) + "." + extension;
+      if (file_utils::exists(oldFile)) file_utils::remove(oldFile);
     }
 
     for (int i = max_items_ - 1; i >= 1; --i) {
-      std::string oldFile = name_ + "." + std::to_string(i);
-      std::string newFile = name_ + "." + std::to_string(i + 1);
+      auto oldFile = prefix + std::to_string(i) + suffix;
+      auto newFile = prefix + std::to_string(i + 1) + suffix;
       if (fs::exists(oldFile)) {
         fs::rename(oldFile, newFile);
       }
     }
-    std::string firstBackupFile = name_ + ".1";
+    std::string firstBackupFile = prefix + ".1." + suffix;
     if (fs::exists(name_)) {
       fs::rename(name_, firstBackupFile);
     }
