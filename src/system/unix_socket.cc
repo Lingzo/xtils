@@ -15,6 +15,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <cinttypes>
 #include <memory>
 
 #include "xtils/logging/logger.h"
@@ -787,8 +788,8 @@ void UnixSocket::NotifyConnectionState(bool success) {
 
   auto weak_ptr = weak_ptr_factory_.GetWeakPtr();
   task_runner_->PostTask([weak_ptr, success] {
-      auto* socket = weak_ptr.get();
-      if (socket) socket->event_listener_->OnConnect(socket, success);
+    auto* socket = weak_ptr.get();
+    if (socket) socket->event_listener_->OnConnect(socket, success);
   });
 }
 
