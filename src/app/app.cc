@@ -1,6 +1,5 @@
 #include "xtils/app/app.h"
 
-#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>

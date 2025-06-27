@@ -11,6 +11,7 @@
 #include "xtils/logging/logger.h"
 #include "xtils/net/http_server.h"
 #include "xtils/tasks/task_runner.h"
+#include "xtils/utils/exception.h"
 #include "xtils/utils/file_utils.h"
 #include "xtils/utils/json.h"
 #include "xtils/utils/micros.h"
@@ -66,13 +67,11 @@ std::map<std::string, std::string> getProcessStatusMap() {
     result["memory_rss_kb"] = std::to_string(rss_kb);
     result["thread_count"] = stats[19];
   }
-
-  try {
-    size_t fd_count = file_utils::list_files("/proc/self/fd").size();
+  
+  utils::Try([&result] {
+    size_t fd_count = file_utils::list_directory("/proc/self/fd").size();
     result["fd_count"] = std::to_string(fd_count);
-  } catch (...) {
-    result["fd_count"] = "error";
-  }
+  });
 
   {
     std::vector<std::string> lines;
