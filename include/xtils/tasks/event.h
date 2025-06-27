@@ -14,11 +14,12 @@
 
 #pragma once
 
+#include <any>
 #include <atomic>
 #include <cstdint>
 #include <functional>
 #include <list>
-#include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include "xtils/tasks/task_group.h"
@@ -29,17 +30,30 @@ namespace xtils {
 #define PARALLEL_EVENT(x) ((PARALLEL_PREFIX) | (x))
 
 using EventId = std::uint32_t;
-using EventData = std::shared_ptr<void>;
+using EventData = std::any;
 
 struct Event {
-  explicit Event(EventId e, EventData d = nullptr) : id(e), data(d) {}
-
-  template <typename T>
-  const T& refData() const {
-    return *std::static_pointer_cast<T>(this->data);
-  }
   const EventId id;
   const EventData data;
+
+  template <typename T>
+  bool is() const {
+    return data.type() == typeid(T);
+  }
+
+  template <typename T>
+  const T& as() const {
+    return std::any_cast<const T&>(data);
+  }
+
+  template <typename T>
+  std::optional<T> try_as() const {
+    try {
+      return std::any_cast<T>(data);
+    } catch (...) {
+      return std::nullopt;
+    }
+  }
 };
 
 using OnEvent = std::function<void(const Event&)>;
@@ -50,13 +64,14 @@ class EventManager {
   void connect(EventId id, OnEvent cb);
   template <typename T>
   void emit(EventId id, const T& d) {
-    emit(Event{id, std::make_shared<T>(d)});
+    emit(Event{id, std::make_any<T>(d)});
   }
   void emit(const Event& e);
 
  private:
   using Callbacks = std::list<OnEvent>;
-  void dispatch(Callbacks& cbs, const Event& e);
+  // copy cbs for threads safe
+  void dispatch(Callbacks cbs, const Event& e);
   std::atomic_int idx{0};
   int pool_size;
   std::unordered_map<EventId, Callbacks> maps_;

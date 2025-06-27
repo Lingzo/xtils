@@ -5,9 +5,7 @@
 #include <unistd.h>
 
 #include <functional>
-#include <string>
 
-#include "xtils/logging/logger.h"
 #include "xtils/system/platform.h"
 
 namespace xtils {
@@ -48,7 +46,6 @@ class ScopedResource {
   void reset(T r = InvalidValue) {
     if (Checker::IsValid(t_)) {
       int res = CloseFunction(t_);
-      if (CheckClose) CHECK(res == 0);
     }
     t_ = r;
   }

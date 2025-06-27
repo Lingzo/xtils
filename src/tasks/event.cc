@@ -39,7 +39,7 @@ void EventManager::emit(const Event& e) {
   });
 }
 
-void EventManager::dispatch(Callbacks& cbs, const Event& e) {
+void EventManager::dispatch(Callbacks cbs, const Event& e) {
   if (isParallelEvent(e.id)) {
     for (auto& cb : cbs) {
       tg_->PostAsyncTask([cb, e]() { cb(e); });

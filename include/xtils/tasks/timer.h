@@ -68,9 +68,7 @@ template <typename TimePoint, typename TimerInfoType>
 class BaseTimer {
  public:
   explicit BaseTimer(TaskGroup* task_group)
-      : task_group_(task_group), weak_factor_(this) {
-    CHECK(task_group != nullptr);
-  }
+      : task_group_(task_group), weak_factor_(this) {}
 
   virtual ~BaseTimer() { CancelAllTimers(); }
 
