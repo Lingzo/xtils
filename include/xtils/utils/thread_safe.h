@@ -10,10 +10,9 @@ template <typename T>
 class ThreadSafe {
  public:
   using value_type = typename T::value_type;
-  ~ThreadSafe() {
-    quit_ = true;
-    cv_.notify_all();
-  }
+  ThreadSafe() = default;
+  ~ThreadSafe() { quit(); }
+
   bool pop_wait(value_type& e) {
     std::unique_lock<std::mutex> lock(mtx_);
     cv_.wait(lock, [&]() { return !data_.empty() | quit_; });
@@ -22,6 +21,7 @@ class ThreadSafe {
     data_.pop_front();
     return true;
   }
+
   bool try_pop(value_type& e) {
     std::lock_guard<std::mutex> lock(mtx_);
     if (data_.empty()) return false;
@@ -29,6 +29,7 @@ class ThreadSafe {
     data_.pop_front();
     return true;
   }
+
   void push(const value_type& e) {
     std::lock_guard<std::mutex> lock(mtx_);
     data_.push_back(e);
@@ -54,8 +55,8 @@ class ThreadSafe {
 
   void quit() {
     std::lock_guard<std::mutex> lock(mtx_);
-    cv_.notify_all();
     quit_ = true;
+    cv_.notify_all();
   }
 
  private:

@@ -27,14 +27,18 @@ class TaskGroup {
   TaskRunner* main();
   TaskRunner* slave();
 
+  bool is_busy();
+  int size();
+
  private:
-  void runLoop(const std::string& name);
+  void runLoop(int id);
+  void loopExited(int id);
 
  private:
   std::atomic_bool quit_{false};
   ThreadSafe<std::list<Task>> tasks_;
   std::list<std::thread> threads_;
-  int pool_size_;
+  std::atomic_int exit_id_{-1};
   ThreadTaskRunner main_runner_;
   ThreadTaskRunner slave_runner_;
   WeakPtrFactory<TaskGroup> weak_factory_;

@@ -11,8 +11,9 @@
 
 namespace xtils {
 
-void TaskGroup::runLoop(const std::string& name) {
-  xtils::MaybeSetThreadName(name);
+void TaskGroup::runLoop(int id) {
+  StackString<10> name("T-%02d", id);
+  xtils::MaybeSetThreadName(name.c_str());
   Task task;
   while (!quit_) {
     if (tasks_.pop_wait(task)) {
@@ -22,17 +23,23 @@ void TaskGroup::runLoop(const std::string& name) {
         LogW("task exception: %s", e.what());
       }
     }
+    if (exit_id_.load() == id) {
+      loopExited(id);
+    }
   }
 }
 
+void TaskGroup::loopExited(int id) {
+  LogI("thread %d exit", id);
+  exit_id_.store(-1);
+}
+
 TaskGroup::TaskGroup(int size)
-    : pool_size_(size),
-      weak_factory_(this),
+    : weak_factory_(this),
       main_runner_(ThreadTaskRunner::CreateAndStart("mainLoop")),
       slave_runner_(ThreadTaskRunner::CreateAndStart("slaveLoop")) {
-  for (int i = 0; i < pool_size_; i++) {
-    StackString<10> name("T-%02d", i);
-    threads_.emplace_back([this, n = name.ToStr()]() { this->runLoop(n); });
+  for (int i = 0; i < size; i++) {
+    threads_.emplace_back(&TaskGroup::runLoop, this, i);
   }
 }
 TaskGroup::~TaskGroup() {
@@ -61,4 +68,7 @@ void TaskGroup::PostAsyncTask(Task task, uint32_t ms) {
 
 TaskRunner* TaskGroup::slave() { return &slave_runner_; }
 TaskRunner* TaskGroup::main() { return &main_runner_; }
+
+bool TaskGroup::is_busy() { return tasks_.size() > threads_.size() * 2; }
+int TaskGroup::size() { return threads_.size(); }
 }  // namespace xtils

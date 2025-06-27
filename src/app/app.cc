@@ -67,7 +67,7 @@ void App::init(int argc, char* argv[]) {
   }
 
   // init thread pool
-  int threads_size = 20;  // conf().get_int("xtils.threads");
+  int threads_size = conf().get_int("xtils.threads");
   CHECK(threads_size > 1);
   tg_ = std::make_unique<TaskGroup>(threads_size);
   em_ = std::make_unique<EventManager>(tg_.get());
@@ -137,15 +137,18 @@ void App::run() {
   auto now = []() {
     return std::chrono::steady_clock::now().time_since_epoch().count();
   };
-  std::atomic_int64_t t1 = now();
+  int64_t t1 = now();
   while (!system::SignalHandler::IsShutdownRequested()) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    PostTask([&t1, now]() { t1 = now(); });
-    double ms = (now() - t1) / 1e6;
-    if (ms > 5000) {
-      LogW("main threads blocked, %fms!!!", ms);
-    } else {
-      LogI("Main Running");
+    double diff = (now() - t1) / 1e6;
+    if (diff > 5000) {
+      LogW("main threads blocked, %fms!!!", diff);
+    } else if (diff > 2000) {
+      PostTask([&t1, now]() { t1 = now(); });
+    }
+    if (tg_->is_busy()) {
+      LogW("task group is busy, maybe use more threads, cur is: %d!!!",
+           tg_->size());
     }
   }
   running_ = false;
@@ -169,7 +172,7 @@ void App::deinit() {
   system::SignalHandler::Cleanup();
 }
 
-void App::PostTask(std::function<void()> task) { tg_->PostTask(task); }
+void App::PostTask(Task task) { tg_->PostTask(task); }
 
 void App::PostAsyncTask(Task task, Task main) {
   std::weak_ptr<TaskGroup> weak_ptr = tg_;
