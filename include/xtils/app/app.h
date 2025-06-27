@@ -1,5 +1,8 @@
 #pragma once
 
+#include <sys/types.h>
+
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -7,6 +10,7 @@
 #include "xtils/config/config.h"
 #include "xtils/tasks/event.h"
 #include "xtils/tasks/task_group.h"
+#include "xtils/tasks/timer.h"
 
 namespace xtils {
 using Task = std::function<void()>;
@@ -29,6 +33,10 @@ class App {
   void PostTask(Task task);
   void PostAsyncTask(Task task, Task main = nullptr);
 
+  void every(uint32_t ms, TimerCallback cb);
+
+  void delay(uint32_t ms, TimerCallback cb);
+
   // event
   void emit(const Event& e);
   void connect(EventId id, OnEvent cb);
@@ -47,6 +55,7 @@ class App {
   Config config_;
   std::unique_ptr<EventManager> em_;
   std::shared_ptr<TaskGroup> tg_;
+  std::unique_ptr<SteadyTimer> timer_;
   std::vector<std::shared_ptr<Service>> service_;
   bool running_ = false;
 };

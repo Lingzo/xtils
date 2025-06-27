@@ -7,6 +7,7 @@
 #include "xtils/system/platform.h"
 
 namespace xtils {
+using Task = std::function<void()>;
 class TaskRunner {
  public:
   virtual ~TaskRunner() = default;

@@ -99,10 +99,12 @@ void level_filtering_example() {
   // Reset to INFO level
   logger::set_level(logger, logger::INFO);
   std::cout << "Reset log level to INFO" << std::endl;
-
+  std::string max_line(10 * 1024, 'c');
+  LogI("max line %s", max_line.c_str());
   LogD("This debug message should NOT appear");
   LogI("This info message SHOULD appear");
   LogW("This warning message SHOULD appear");
+  LogI("max line %s", max_line.c_str());
 }
 
 void threading_example() {

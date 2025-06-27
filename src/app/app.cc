@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -15,6 +16,7 @@
 #include "xtils/system/signal_handler.h"
 #include "xtils/tasks/event.h"
 #include "xtils/tasks/task_group.h"
+#include "xtils/tasks/timer.h"
 #include "xtils/utils/file_utils.h"
 
 namespace xtils {
@@ -65,10 +67,11 @@ void App::init(int argc, char* argv[]) {
   }
 
   // init thread pool
-  int threads_size = conf().get_int("xtils.threads");
+  int threads_size = 20;  // conf().get_int("xtils.threads");
   CHECK(threads_size > 1);
   tg_ = std::make_unique<TaskGroup>(threads_size);
-  em_ = std::make_unique<EventManager>(*tg_);
+  em_ = std::make_unique<EventManager>(tg_.get());
+  timer_ = std::make_unique<SteadyTimer>(tg_.get());
   init_log();
   init_inspect();
 }
@@ -106,7 +109,7 @@ void App::init_inspect() {
     int port = conf().get_int("xtils.inspect.port");
     std::string cors = conf().get_string("xtils.inspect.cors");
 
-    Inspect::Get().Init(tg_->random(), addr, port);
+    Inspect::Get().Init(tg_->slave(), addr, port);
     Inspect::Get().SetCORS(cors);
     LogI("inspect url http://%s:%d, cors: %s", addr.c_str(), port,
          cors.c_str());
@@ -159,6 +162,7 @@ void App::deinit() {
     p->deinit();
   }
   em_.reset();
+  timer_.reset();
   tg_.reset();  // must be last
 
   // Cleanup signal handlers
@@ -182,4 +186,12 @@ void App::PostAsyncTask(Task task, Task main) {
 void App::emit(const Event& e) { em_->emit(e); }
 
 void App::connect(EventId id, OnEvent cb) { em_->emit(id, cb); }
+
+void App::every(uint32_t ms, TimerCallback cb) {
+  timer_->SetRepeatingTimer(ms, cb);
+}
+
+void App::delay(uint32_t ms, TimerCallback cb) {
+  timer_->SetRelativeTimer(ms, cb, TimerType::kOneShot);
+}
 }  // namespace xtils

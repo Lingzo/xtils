@@ -21,6 +21,7 @@ add_example(basic_app basic_app.cc)
 add_example(fsm_example fsm_example.cc)
 add_example(inspect_example inspect_example.cc)
 add_example(logger_example logger_example.cc)
+add_example(timer_example timer_example.cc)
 
 # Optional: Create a custom target to build all examples
 add_custom_target(examples

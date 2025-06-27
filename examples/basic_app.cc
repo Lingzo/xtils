@@ -5,6 +5,7 @@
 #include "xtils/app/service.h"
 #include "xtils/logging/logger.h"
 #include "xtils/tasks/event.h"
+#include "xtils/utils/time_utils.h"
 
 class SimpleService : public xtils::Service {
  public:
@@ -29,6 +30,16 @@ class SimpleService : public xtils::Service {
       std::this_thread::sleep_for(std::chrono::seconds(3));
       LogThis();
     });
+
+    using namespace xtils::time_utils;
+    for (int i = 0; i <= 10; i++) {
+      auto t1 = steady::GetCurrentMs();
+      int ms = 1000 * i;
+      ctx->delay(ms, [t1, ms] {
+        LogW("Delay %dms: %d", ms, steady::GetCurrentMs() - t1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+      });
+    }
   }
 
   void deinit() override { LogI("Deinit"); }

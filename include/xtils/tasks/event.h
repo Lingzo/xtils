@@ -46,8 +46,7 @@ using OnEvent = std::function<void(const Event&)>;
 
 class EventManager {
  public:
-  explicit EventManager(TaskGroup& tg)
-      : tg_(tg) {}
+  explicit EventManager(TaskGroup* tg) : tg_(tg) {}
   void connect(EventId id, OnEvent cb);
   template <typename T>
   void emit(EventId id, const T& d) {
@@ -61,6 +60,6 @@ class EventManager {
   std::atomic_int idx{0};
   int pool_size;
   std::unordered_map<EventId, Callbacks> maps_;
-  TaskGroup& tg_;
+  TaskGroup* tg_;  // no own
 };
 }  // namespace xtils

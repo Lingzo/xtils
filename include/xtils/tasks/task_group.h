@@ -2,45 +2,41 @@
 
 #include <atomic>
 #include <cstdint>
-#include <functional>
+#include <list>
 
 #include "xtils/tasks/task_runner.h"
 #include "xtils/tasks/thread_task_runner.h"
-#include "xtils/utils/string_utils.h"
+#include "xtils/utils/thread_safe.h"
+#include "xtils/utils/weak_ptr.h"
 
 namespace xtils {
 class TaskGroup {
  public:
-  explicit TaskGroup(int size) {
-    for (int i = 0; i < size; i++) {
-      StackString<10> name("T-%02d", i);
-      runners_.push_back(ThreadTaskRunner::CreateAndStart(name.ToStr()));
-    }
-    pool_size_ = runners_.size();
-  }
-  void PostTask(std::function<void()> task) { runners_[0].PostTask(task); }
-  void PostDelayedTask(std::function<void()> task, uint32_t ms) {
-    runners_[0].PostDelayedTask(task, ms);
-  }
+  explicit TaskGroup(int size);
+  ~TaskGroup();
 
-  void PostAsyncTask(std::function<void()> task) {
-    runners_[getNextId()].PostTask(task);
-  }
+  TaskGroup() = delete;
+  TaskGroup(const TaskGroup&) = delete;
+  TaskGroup& operator=(const TaskGroup&) = delete;
+  TaskGroup(TaskGroup&&) = delete;
 
-  TaskRunner* random() { return &runners_[getNextId()]; }
-  TaskRunner* main() { return &runners_[0]; }
+  void PostTask(Task task);
+  void PostDelayedTask(Task task, uint32_t ms);
+  void PostAsyncTask(Task task, uint32_t ms = 0);
+
+  TaskRunner* main();
+  TaskRunner* slave();
 
  private:
-  int getNextId() {  // execpt idx=0;
-    counter += 1;
-    int idx = (counter % (pool_size_ - 1) + 1) % pool_size_;
-    CHECK(idx > 0 && idx < pool_size_);
-    return idx;
-  }
+  void runLoop(const std::string& name);
 
  private:
-  std::atomic_uint counter;
+  std::atomic_bool quit_{false};
+  ThreadSafe<std::list<Task>> tasks_;
+  std::list<std::thread> threads_;
   int pool_size_;
-  std::vector<ThreadTaskRunner> runners_;
+  ThreadTaskRunner main_runner_;
+  ThreadTaskRunner slave_runner_;
+  WeakPtrFactory<TaskGroup> weak_factory_;
 };
 }  // namespace xtils

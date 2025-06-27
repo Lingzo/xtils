@@ -19,7 +19,7 @@ bool isParallelEvent(EventId id) {
   return (PARALLEL_PREFIX & id) == PARALLEL_PREFIX;
 }
 void EventManager::connect(EventId id, OnEvent cb) {
-  tg_.PostTask([this, id, cb]() {
+  tg_->PostTask([this, id, cb]() {
     auto it = maps_.find(id);
     if (it == maps_.end()) {
       maps_.insert({id, {cb}});
@@ -30,7 +30,7 @@ void EventManager::connect(EventId id, OnEvent cb) {
 }
 
 void EventManager::emit(const Event& e) {
-  tg_.PostTask([this, e]() {
+  tg_->PostTask([this, e]() {
     auto it = maps_.end();
     it = maps_.find(e.id);
     if (it != maps_.end()) {
@@ -42,13 +42,14 @@ void EventManager::emit(const Event& e) {
 void EventManager::dispatch(Callbacks& cbs, const Event& e) {
   if (isParallelEvent(e.id)) {
     for (auto& cb : cbs) {
-      tg_.PostAsyncTask([cb, e]() { cb(e); });
+      tg_->PostAsyncTask([cb, e]() { cb(e); });
     }
   } else {
-    auto t = tg_.random();
-    for (auto& cb : cbs) {
-      t->PostTask([cb, e]() { cb(e); });
-    }
+    tg_->PostAsyncTask([e, cbs] {
+      for (auto& cb : cbs) {
+        cb(e);
+      }
+    });
   }
 }
 }  // namespace xtils

@@ -303,34 +303,29 @@ void _write_log(logger::Logger* log, const char* name,
                 const logger::source_loc& lc, logger::log_level level,
                 const char* fmt, ...) {
   if (!log || log->level() > level) return;
+  constexpr size_t kBufSize = MAX_LINE_LOG_SIZE;
+  constexpr const char* kSuffix = "...[truncated]";
+  constexpr size_t kSuffixLen = 14;
 
-  // Use thread-local buffer to avoid repeated allocations
-  static thread_local std::string message_buffer;
-  message_buffer.clear();
-  message_buffer.reserve(MAX_LINE_LOG_SIZE);
+  char buf[kBufSize] = {0};
 
-  // Format message efficiently
   va_list args;
   va_start(args, fmt);
-
-  char temp_buffer[MAX_LINE_LOG_SIZE];
-  int len = vsnprintf(temp_buffer, sizeof(temp_buffer), fmt, args);
-
-  if (len > 0) {
-    if (len >= MAX_LINE_LOG_SIZE) {
-      message_buffer.assign(temp_buffer, MAX_LINE_LOG_SIZE - 1);
-      message_buffer.append("...TRUNCATED");
-    } else {
-      message_buffer.assign(temp_buffer, len);
-    }
-  }
-
+  int n = vsnprintf(buf, kBufSize, fmt, args);
   va_end(args);
-
+  if (n > static_cast<int>(kBufSize)) {
+    std::strcpy(buf + kBufSize - (kSuffixLen + 1), kSuffix);
+    n = kBufSize;
+    level = logger::WARN;
+  } else if (n < 0) {
+    std::strcpy(buf, "[format error]");
+    n = kSuffixLen;
+    level = logger::WARN;
+  }
   // Use async logging for better performance, except for INFO and above
   if (level >= logger::INFO) {
-    log->write_log_sync(name, lc, level, message_buffer);
+    log->write_log_sync(name, lc, level, std::string(buf, n));
   } else {
-    log->write_log_async(name, lc, level, message_buffer);
+    log->write_log_async(name, lc, level, std::string(buf, n));
   }
 }
