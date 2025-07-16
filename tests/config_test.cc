@@ -217,7 +217,7 @@ void test_json_parsing() {
     }
   })";
 
-  assert(config.parse_json(json_content));
+  assert(config.parse(json_content));
 
   // Test parsed values
   assert(config.get_int("server.port") == 9090);
@@ -514,7 +514,7 @@ void test_complex_nested_structures() {
     }
   })";
 
-  assert(config.parse_json(complex_json));
+  assert(config.parse(complex_json));
 
   // Test deep nested access
   assert(config.get_string("database.primary.host") == "db1.example.com");
@@ -535,8 +535,8 @@ void test_error_handling() {
   Config config;
 
   // Test invalid JSON
-  assert(!config.parse_json("{ invalid json }"));
-  assert(!config.parse_json("{ \"key\": }"));
+  assert(!config.parse("{ invalid json }"));
+  assert(!config.parse("{ \"key\": }"));
 
   // Test loading non-existent file
   assert(!config.load_file("non_existent_file.json"));
@@ -589,7 +589,7 @@ void test_comprehensive_json_compatibility() {
     }
   })";
 
-  assert(config.parse_json(comprehensive_json));
+  assert(config.parse(comprehensive_json));
 
   // Test accessing all types
   assert(!config.has("null_value") || config.get("null_value")->is_null());

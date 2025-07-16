@@ -1,4 +1,5 @@
 #include "xtils/app/app.h"
+#include "xtils/config/config.h"
 
 namespace xtils {
 class Service {
@@ -11,5 +12,6 @@ class Service {
   friend class App;
   xtils::App* ctx;
   std::string name;
+  Config config_;
 };
 }  // namespace xtils

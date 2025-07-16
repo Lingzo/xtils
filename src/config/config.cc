@@ -57,7 +57,12 @@ bool Config::parse_args(int argc, char* argv[]) {
 
     // Skip help flags
     if (arg == "-h" || arg == "--help") {
-      continue;
+      std::cout << help() << std::endl;
+      exit(0);
+    }
+    if (arg == "--dump") {
+      print();
+      exit(0);
     }
 
     // Skip config-file argument as it's already processed
@@ -135,22 +140,24 @@ bool Config::load_file(const std::string& filename) {
   buffer << file.rdbuf();
   file.close();
 
-  return parse_json(buffer.str());
+  return parse(buffer.str());
 }
 
-bool Config::parse_json(const std::string& json_content) {
+bool Config::parse(const std::string& json_content) {
   auto json = Json::parse(json_content);
   if (!json) {
     LogE("Failed to parse JSON configuration");
     return false;
   }
-
+  return parse_json(*json);
+}
+bool Config::parse_json(const Json& json) {
   // Apply defaults first
   apply_defaults();
 
   // Merge JSON values
-  if (json->is_object()) {
-    data_ = merge_objects(data_, *json);
+  if (json.is_object()) {
+    data_ = merge_objects(data_, json);
   }
 
   return validate();
@@ -264,7 +271,6 @@ std::vector<std::string> Config::missing_required() const {
 }
 
 void Config::print() const {
-  std::cout << "Current Configuration:\n";
   std::cout << data_.dump(2) << std::endl;
 }
 

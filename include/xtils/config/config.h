@@ -27,6 +27,13 @@ class Config {
           description(description),
           default_value(default_value),
           required(required) {}
+    Option& operator=(const Option& o) {
+      this->name = o.name;
+      this->description = o.description;
+      this->default_value = o.default_value;
+      this->required = o.required;
+      return *this;
+    }
   };
 
   Config() : data_(Json::object_t{}) {}
@@ -45,7 +52,8 @@ class Config {
   // first, then command line arguments can override file settings
   bool parse_args(int argc, char* argv[]);
   bool load_file(const std::string& filename);
-  bool parse_json(const std::string& json_content);
+  bool parse_json(const Json& json);
+  bool parse(const std::string& json_content);
 
   // Primary access method with dot notation support (e.g., "server.port")
   template <typename T>
@@ -76,6 +84,7 @@ class Config {
   Json to_json() const;
   bool save(const std::string& filename) const;
   void print() const;
+  auto options() { return options_; }
 
  private:
   std::map<std::string, Option> options_;

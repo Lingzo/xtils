@@ -3,16 +3,23 @@
 
 #include "xtils/app/app.h"
 #include "xtils/app/service.h"
+#include "xtils/config/config.h"
 #include "xtils/logging/logger.h"
 #include "xtils/tasks/event.h"
 #include "xtils/utils/time_utils.h"
 
 class SimpleService : public xtils::Service {
  public:
-  SimpleService() : xtils::Service("SimpleService") {}
+  SimpleService() : xtils::Service("simple") {
+    config_.define("params", "params", 0);
+    config_.define("p.level", "p.level", 2);
+    config_.define("p.level.1", "p.level.1", false);
+    config_.define("p.level.3", "p.level.3", "string");
+  }
 
   void init() override {
     LogI("Compenets Init");
+    LogI("params is %d", config_.get<int>("params"));
     for (int i = 0; i < 10; i++)
       ctx->PostAsyncTask(
           []() {
@@ -46,11 +53,11 @@ class SimpleService : public xtils::Service {
 };
 
 int main(int argc, char* argv[]) {
-  xtils::App app;
-  app.init(argc, argv);
+  auto app = xtils::App::instance();
+  app->registor<SimpleService>();
 
-  app.registor<SimpleService>();
+  app->init(argc, argv);
 
-  app.run();
+  app->run();
   return 0;
 }

@@ -22,8 +22,9 @@ namespace xtils {
 
 App::App() { default_config(); }
 
-App::~App() {
-  // Cleanup will be handled by unique_ptr destructors
+App* App::instance() {
+  static App app;
+  return &app;
 }
 
 void App::default_config() {
@@ -47,6 +48,14 @@ void App::init(int argc, char* argv[]) {
   // Setup signal handlers for graceful shutdown
   system::SignalHandler::Initialize();
 
+  // all config
+  for (const auto& s : service_) {
+    for (const auto& e : s->config_.options()) {
+      const auto& opt = e.second;
+      config_.define(s->name + "." + opt.name, opt.description,
+                     opt.default_value, opt.required);
+    }
+  }
   // Parse command line arguments and load configuration
   if (!config_.parse_args(argc, argv)) {
     std::cerr << "Failed to parse command line arguments" << std::endl;
@@ -63,6 +72,14 @@ void App::init(int argc, char* argv[]) {
     }
     std::cerr << config_.help() << std::endl;
     exit(1);
+  }
+
+  // sub config
+  for (auto& s : service_) {
+    auto sub = config_.get(s->name);
+    if (sub) {
+      s->config_.parse_json(*sub);
+    }
   }
 
   // init thread pool

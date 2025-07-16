@@ -17,9 +17,12 @@ using Task = std::function<void()>;
 
 class Service;
 class App {
- public:
+ private:
   App();
-  ~App();
+
+ public:
+  ~App() = default;
+  static App* instance();
 
   void init(int argc, char* argv[]);
   void run();
