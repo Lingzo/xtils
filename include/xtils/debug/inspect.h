@@ -35,11 +35,11 @@ class Inspect {
     std::map<std::string, std::string> query;
     std::string data;
     bool is_text;
-    void* connection;  // HttpServerConnection* - opaque pointer to avoid header
+    void *connection;  // HttpServerConnection* - opaque pointer to avoid header
                        // dependency
 
-    WebSocketRequest(const std::string& path = "", const std::string& data = "",
-                     bool is_text = true, void* connection = nullptr)
+    WebSocketRequest(const std::string &path = "", const std::string &data = "",
+                     bool is_text = true, void *connection = nullptr)
         : path(path), data(data), is_text(is_text), connection(connection) {}
   };
 
@@ -50,11 +50,11 @@ class Inspect {
     std::string status;
     bool is_text = true;
 
-    Response(const std::string& content = "",
-             const std::string& content_type = "text/plain",
-             const std::string& status = "200 OK")
+    Response(const std::string &content = "",
+             const std::string &content_type = "text/plain",
+             const std::string &status = "200 OK")
         : content(content), content_type(content_type), status(status) {}
-    Response(const std::string& content, bool is_text)
+    Response(const std::string &content, bool is_text)
         : content(content), is_text(is_text) {}
   };
 
@@ -71,8 +71,8 @@ class Inspect {
   };
 
   // Handler types
-  using Handler = std::function<Response(const Request&)>;
-  using WebSocketHandler = std::function<Response(const WebSocketRequest&)>;
+  using Handler = std::function<Response(const Request &)>;
+  using WebSocketHandler = std::function<Response(const WebSocketRequest &)>;
 
   // Combined route information
   struct RouteInfo {
@@ -82,9 +82,9 @@ class Inspect {
     bool supports_websocket = false;
 
     RouteInfo() = default;
-    RouteInfo(const std::string& desc, Handler handler)
+    RouteInfo(const std::string &desc, Handler handler)
         : description(desc), http_handler(handler) {}
-    RouteInfo(const std::string& desc, Handler handler,
+    RouteInfo(const std::string &desc, Handler handler,
               WebSocketHandler ws_handler)
         : description(desc),
           http_handler(handler),
@@ -93,8 +93,8 @@ class Inspect {
   };
 
   // Factory methods - Thread-safe singleton pattern
-  static Inspect& Get();
-  void Init(TaskRunner* task_runner, const std::string& ip = "127.0.0.1",
+  static Inspect &Get();
+  void Init(TaskRunner *task_runner, const std::string &ip = "127.0.0.1",
             int port = 8080);
 
   /**
@@ -109,16 +109,16 @@ class Inspect {
   bool IsRunning() const;
 
   // HTTP routing
-  void RouteWithDescription(const std::string& path,
-                            const std::string& description, Handler handler);
-  void Static(const std::string& path, const std::string& content,
-              const std::string& content_type = "text/html");
-  void Unregister(const std::string& path);
-  bool HasRoute(const std::string& path) const;
+  void RouteWithDescription(const std::string &path,
+                            const std::string &description, Handler handler);
+  void Static(const std::string &path, const std::string &content,
+              const std::string &content_type = "text/html");
+  void Unregister(const std::string &path);
+  bool HasRoute(const std::string &path) const;
 
   // Combined HTTP/WebSocket routing
-  void RouteWithHandlers(const std::string& path,
-                         const std::string& description, Handler http_handler,
+  void RouteWithHandlers(const std::string &path,
+                         const std::string &description, Handler http_handler,
                          WebSocketHandler ws_handler);
 
   /**
@@ -126,42 +126,42 @@ class Inspect {
    * @param path The path to check.
    * @return True if a WebSocket handler is registered, false otherwise.
    */
-  bool HasWebSocketRoute(const std::string& path) const;
+  bool HasWebSocketRoute(const std::string &path) const;
 
   // WebSocket publishing (broadcast to all subscribers of a URL)
-  size_t Publish(const std::string& url, const std::string& message,
+  size_t Publish(const std::string &url, const std::string &message,
                  bool is_text = true);
-  size_t Publish(const std::string& url, const xtils::Json& json);
-  PublishResult PublishWithResult(const std::string& url,
-                                  const std::string& message,
+  size_t Publish(const std::string &url, const xtils::Json &json);
+  PublishResult PublishWithResult(const std::string &url,
+                                  const std::string &message,
                                   bool is_text = true);
 
-  bool HasSubscribers(const std::string& url) const;
-  size_t GetSubscriberCount(const std::string& url) const;
+  bool HasSubscribers(const std::string &url) const;
+  size_t GetSubscriberCount(const std::string &url) const;
 
   // Response helpers
-  static Response JsonResponse(const xtils::Json& json,
-                               const std::string& status = "200 OK");
-  static Response TextResponse(const std::string& text,
-                               const std::string& status = "200 OK");
-  static Response HtmlResponse(const std::string& html,
-                               const std::string& status = "200 OK");
+  static Response JsonResponse(const xtils::Json &json,
+                               const std::string &status = "200 OK");
+  static Response TextResponse(const std::string &text,
+                               const std::string &status = "200 OK");
+  static Response HtmlResponse(const std::string &html,
+                               const std::string &status = "200 OK");
   static Response ErrorResponse(
-      const std::string& message,
-      const std::string& status = "500 Internal Server Error");
-  static Response NotFoundResponse(const std::string& message = "");
+      const std::string &message,
+      const std::string &status = "500 Internal Server Error");
+  static Response NotFoundResponse(const std::string &message = "");
 
   // Utilities
   xtils::Json GetServerInfo() const;
-  void SetCORS(const std::string& allow_origin = "*");
+  void SetCORS(const std::string &allow_origin = "*");
   std::vector<std::string> GetRoutes() const;
   std::vector<std::string> GetWebSocketRoutes() const;
 
   // Non-copyable, non-movable
-  Inspect(const Inspect&) = delete;
-  Inspect& operator=(const Inspect&) = delete;
-  Inspect(Inspect&&) = delete;
-  Inspect& operator=(Inspect&&) = delete;
+  Inspect(const Inspect &) = delete;
+  Inspect &operator=(const Inspect &) = delete;
+  Inspect(Inspect &&) = delete;
+  Inspect &operator=(Inspect &&) = delete;
 
  private:
   Inspect();
@@ -191,9 +191,16 @@ class Inspect {
                                             ws_handler);                     \
   } while (0)
 
+#define INSPECT_SIMPLE(path, expr)                    \
+  do {                                                \
+    auto handler = [&](const Inspect::Request &req) { \
+      (expr);                                         \
+      return Inspect::TextResponse("");               \
+    };                                                \
+    INSPECT_ROUTE(path, "empty response", handler);   \
+  } while (0)
+
 // WebSocket publishing to all subscribers
-#define INSPECT_PUBLISH(url, message) \
-  xtils::Inspect::Get().Publish(url, message, true)
 #define INSPECT_PUBLISH_TEXT(url, message) \
   xtils::Inspect::Get().Publish(url, message, true)
 #define INSPECT_PUBLISH_BINARY(url, message) \

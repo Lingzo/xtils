@@ -1,6 +1,7 @@
 #include <atomic>
 #include <ctime>
 #include <thread>
+#include <tuple>
 
 #include "xtils/debug/inspect.h"
 #include "xtils/logging/logger.h"
@@ -13,7 +14,7 @@ using namespace xtils;
 static std::atomic<int> global_counter{0};
 
 // Example handler functions
-Inspect::Response HandleHello(const Inspect::Request& req) {
+Inspect::Response HandleHello(const Inspect::Request &req) {
   xtils::Json response;
   response["message"] = "Hello, World!";
   response["path"] = req.path;
@@ -22,7 +23,7 @@ Inspect::Response HandleHello(const Inspect::Request& req) {
   // Include query parameters if any
   if (!req.query.empty()) {
     xtils::Json query_json;
-    for (const auto& [key, value] : req.query) {
+    for (const auto &[key, value] : req.query) {
       query_json[key] = value;
     }
     response["query"] = query_json;
@@ -31,7 +32,7 @@ Inspect::Response HandleHello(const Inspect::Request& req) {
   return Inspect::JsonResponse(response);
 }
 
-Inspect::Response HandleUserInfo(const Inspect::Request& req) {
+Inspect::Response HandleUserInfo(const Inspect::Request &req) {
   // Extract user ID from query parameters
   auto it = req.query.find("id");
   if (it == req.query.end()) {
@@ -49,7 +50,7 @@ Inspect::Response HandleUserInfo(const Inspect::Request& req) {
   return Inspect::JsonResponse(user_info);
 }
 
-Inspect::Response HandleStatus(const Inspect::Request& req) {
+Inspect::Response HandleStatus(const Inspect::Request &req) {
   xtils::Json status;
   status["server"] = "running";
   status["timestamp"] = std::time(nullptr);
@@ -62,7 +63,7 @@ Inspect::Response HandleStatus(const Inspect::Request& req) {
   return Inspect::JsonResponse(status);
 }
 
-Inspect::Response HandleEcho(const Inspect::Request& req) {
+Inspect::Response HandleEcho(const Inspect::Request &req) {
   if (req.method == "POST") {
     xtils::Json echo_response;
     echo_response["echo"] = req.body;
@@ -80,7 +81,7 @@ int main() {
 
   // Create and configure Inspect server
   Inspect::Get().Init(&task_runner, "127.0.0.1", 9090);
-  auto& inspect = Inspect::Get();
+  auto &inspect = Inspect::Get();
 
   // Register routes using the new INSPECT_ROUTE macro
   INSPECT_ROUTE("/api/hello", "Returns a hello world message with request info",
@@ -98,7 +99,7 @@ int main() {
 
   // Register a simple lambda route
   INSPECT_ROUTE("/api/time", "Get current timestamp",
-                [](const Inspect::Request& req) {
+                [](const Inspect::Request &req) {
                   xtils::Json time_response;
                   time_response["timestamp"] = std::time(nullptr);
                   time_response["iso_time"] = "2024-01-01T00:00:00Z";
@@ -107,7 +108,7 @@ int main() {
 
   // Counter API for WebSocket demonstration
   INSPECT_ROUTE("/api/counter", "Get or increment global counter",
-                [](const Inspect::Request& req) {
+                [](const Inspect::Request &req) {
                   if (req.method == "GET") {
                     xtils::Json response;
                     response["counter"] = global_counter.load();
@@ -131,8 +132,8 @@ int main() {
 
   INSPECT_DUAL_ROUTE(
       "/ping", "支持http和ws",
-      [](const Inspect::Request& req) { return Inspect::TextResponse("pong"); },
-      [](const Inspect::WebSocketRequest& req) {
+      [](const Inspect::Request &req) { return Inspect::TextResponse("pong"); },
+      [](const Inspect::WebSocketRequest &req) {
         return Inspect::Response(req.data, req.is_text);
       });
 
@@ -187,14 +188,15 @@ int main() {
 </html>)";
 
   INSPECT_STATIC("/demo", demo_html, "text/html");
+  INSPECT_SIMPLE("/api/simple", LogThis());
+  INSPECT_SIMPLE("/api/test", inspect.GetRoutes());
 
   // Enable CORS for API endpoints
   inspect.SetCORS("*");
-
   // Start the server
-  LogI("Starting optimized Inspect server on port 8080...");
-  LogI("Visit http://localhost:8080/ for API documentation");
-  LogI("Visit http://localhost:8080/demo for interactive demo");
+  LogI("Starting optimized Inspect server on port 9090...");
+  LogI("Visit http://localhost:9090/ for API documentation");
+  LogI("Visit http://localhost:9090/demo for interactive demo");
 
   // Background thread for periodic WebSocket messages and stats
   std::thread background_thread([&inspect]() {
@@ -248,7 +250,7 @@ int main() {
              activity_counter / 60, global_counter.load());
       }
     }
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     LogE("Server error: %s", e.what());
   }
 
