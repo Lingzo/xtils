@@ -11,6 +11,7 @@
 #include "xtils/logging/logger.h"
 #include "xtils/net/http_server.h"
 #include "xtils/tasks/task_runner.h"
+#include "xtils/tasks/thread_task_runner.h"
 #include "xtils/utils/exception.h"
 #include "xtils/utils/file_utils.h"
 #include "xtils/utils/json.h"
@@ -67,7 +68,7 @@ std::map<std::string, std::string> getProcessStatusMap() {
     result["memory_rss_kb"] = std::to_string(rss_kb);
     result["thread_count"] = stats[19];
   }
-  
+
   utils::Try([&result] {
     size_t fd_count = file_utils::list_directory("/proc/self/fd").size();
     result["fd_count"] = std::to_string(fd_count);
@@ -691,12 +692,14 @@ class Impl : public HttpRequestHandler {
 
 static Impl* impl_ = nullptr;
 // Inspect class implementation
-Inspect::Inspect() { impl_ = new Impl(); }
+Inspect::Inspect() : task_runner_(ThreadTaskRunner::CreateAndStart("inspect")) {
+  impl_ = new Impl();
+}
 
 Inspect::~Inspect() { SAFE_DELETE_OBJ(impl_); }
 
-void Inspect::Init(TaskRunner* task_runner, const std::string& ip, int port) {
-  if (impl_) impl_->Init(task_runner, ip, port);
+void Inspect::Init(const std::string& ip, int port) {
+  if (impl_) impl_->Init(&task_runner_, ip, port);
 }
 
 Inspect& Inspect::Get() {

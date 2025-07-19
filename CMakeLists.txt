@@ -5,6 +5,10 @@ project(xtils)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+option(INSPECT_DISABLE "Disable inspect module" OFF)
+option(BUILD_TESTS "Build tests" OFF)
+option(BUILD_EXAMPLES "Build examples" ON)
+
 file(GLOB_RECURSE SRCS src/*.cc)
 # Create a single library
 add_library(xtils STATIC ${SRCS})
@@ -12,6 +16,11 @@ target_include_directories(xtils PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+
+if(INSPECT_DISABLE)
+    target_compile_definitions(xtils PUBLIC -DINSPECT_DISABLE=1)
+endif()
+
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build" FORCE)
 endif()
@@ -25,8 +34,12 @@ target_link_options(xtils PUBLIC
     $<$<CONFIG:Release>:-rdynamic -Wl,--as-needed -Wl,--gc-sections>
     $<$<CONFIG:RelWithDebInfo>:-rdynamic -Wl,--as-needed -Wl,--gc-sections>)
 
-add_subdirectory(tests)
-add_subdirectory(examples)
+if(BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
+if(BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
 # Installation configuration
 include(GNUInstallDirs)

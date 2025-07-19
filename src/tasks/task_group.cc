@@ -36,8 +36,7 @@ void TaskGroup::loopExited(int id) {
 
 TaskGroup::TaskGroup(int size)
     : weak_factory_(this),
-      main_runner_(ThreadTaskRunner::CreateAndStart("mainLoop")),
-      slave_runner_(ThreadTaskRunner::CreateAndStart("slaveLoop")) {
+      main_runner_(ThreadTaskRunner::CreateAndStart("mainLoop")) {
   for (int i = 0; i < size; i++) {
     threads_.emplace_back(&TaskGroup::runLoop, this, i);
   }
@@ -58,7 +57,7 @@ void TaskGroup::PostAsyncTask(Task task, uint32_t ms) {
     tasks_.push(task);
   } else {
     auto weak = weak_factory_.GetWeakPtr();
-    slave_runner_.PostDelayedTask(
+    main_runner_.PostDelayedTask(
         [task, weak]() {
           if (auto ptr = weak.get()) ptr->tasks_.push(task);
         },
@@ -66,7 +65,6 @@ void TaskGroup::PostAsyncTask(Task task, uint32_t ms) {
   }
 }
 
-TaskRunner* TaskGroup::slave() { return &slave_runner_; }
 TaskRunner* TaskGroup::main() { return &main_runner_; }
 
 bool TaskGroup::is_busy() { return tasks_.size() > threads_.size() * 2; }

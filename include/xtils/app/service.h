@@ -12,6 +12,6 @@ class Service {
   friend class App;
   xtils::App* ctx;
   std::string name;
-  Config config_;
+  Config config;
 };
 }  // namespace xtils

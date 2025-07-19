@@ -50,7 +50,7 @@ void App::init(int argc, char* argv[]) {
 
   // all config
   for (const auto& s : service_) {
-    for (const auto& e : s->config_.options()) {
+    for (const auto& e : s->config.options()) {
       const auto& opt = e.second;
       config_.define(s->name + "." + opt.name, opt.description,
                      opt.default_value, opt.required);
@@ -78,7 +78,7 @@ void App::init(int argc, char* argv[]) {
   for (auto& s : service_) {
     auto sub = config_.get(s->name);
     if (sub) {
-      s->config_.parse_json(*sub);
+      s->config.parse_json(*sub);
     }
   }
 
@@ -120,12 +120,13 @@ void App::init_log() {
 }
 
 void App::init_inspect() {
+#ifndef INSPECT_DISABLE
   if (conf().get_bool("xtils.inspect.enable")) {
     std::string addr = conf().get_string("xtils.inspect.addr");
     int port = conf().get_int("xtils.inspect.port");
     std::string cors = conf().get_string("xtils.inspect.cors");
 
-    Inspect::Get().Init(tg_->slave(), addr, port);
+    Inspect::Get().Init(addr, port);
     Inspect::Get().SetCORS(cors);
     LogI("inspect url http://%s:%d, cors: %s", addr.c_str(), port,
          cors.c_str());
@@ -137,6 +138,7 @@ void App::init_inspect() {
                     return Inspect::JsonResponse(config_.to_json());
                   });
   }
+#endif
 }
 void App::run() {
   if (running_) {
@@ -174,9 +176,12 @@ void App::run() {
 }
 
 void App::deinit() {
+#ifndef INSPECT_DISABLE
   if (conf().get_bool("xtils.inspect.enable")) {
     Inspect::Get().Stop();
   }
+#endif
+
   for (auto& p : service_) {
     p->deinit();
   }

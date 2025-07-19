@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <vector>
 
@@ -29,8 +30,13 @@ class App {
   template <typename T>
   std::shared_ptr<T> registor() {
     auto p = std::make_shared<T>();
-    service_.emplace_back(p);
+    registor(p);
     return p;
+  }
+  void registor(std::initializer_list<std::shared_ptr<Service>> services) {
+    for (auto& service : services) {
+      service_.emplace_back(service);
+    }
   }
   void registor(std::shared_ptr<Service> p) { service_.emplace_back(p); }
   void PostTask(Task task);

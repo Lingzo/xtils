@@ -25,7 +25,6 @@ class TaskGroup {
   void PostAsyncTask(Task task, uint32_t ms = 0);
 
   TaskRunner* main();
-  TaskRunner* slave();
 
   bool is_busy();
   int size();
@@ -40,7 +39,6 @@ class TaskGroup {
   std::list<std::thread> threads_;
   std::atomic_int exit_id_{-1};
   ThreadTaskRunner main_runner_;
-  ThreadTaskRunner slave_runner_;
   WeakPtrFactory<TaskGroup> weak_factory_;
 };
 }  // namespace xtils

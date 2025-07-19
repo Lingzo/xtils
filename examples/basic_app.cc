@@ -11,15 +11,15 @@
 class SimpleService : public xtils::Service {
  public:
   SimpleService() : xtils::Service("simple") {
-    config_.define("params", "params", 0);
-    config_.define("p.level", "p.level", 2);
-    config_.define("p.level.1", "p.level.1", false);
-    config_.define("p.level.3", "p.level.3", "string");
+    config.define("params", "params", 0);
+    config.define("p.level", "p.level", 2);
+    config.define("p.level.1", "p.level.1", false);
+    config.define("p.level.3", "p.level.3", "string");
   }
 
   void init() override {
     LogI("Compenets Init");
-    LogI("params is %d", config_.get<int>("params"));
+    LogI("params is %d", config.get<int>("params"));
     for (int i = 0; i < 10; i++)
       ctx->PostAsyncTask(
           []() {

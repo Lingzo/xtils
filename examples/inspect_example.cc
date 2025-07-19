@@ -76,11 +76,8 @@ Inspect::Response HandleEcho(const Inspect::Request &req) {
 }
 
 int main() {
-  // Create task runner
-  auto task_runner = ThreadTaskRunner::CreateAndStart("example");
-
   // Create and configure Inspect server
-  Inspect::Get().Init(&task_runner, "127.0.0.1", 9090);
+  Inspect::Get().Init("127.0.0.1", 9090);
   auto &inspect = Inspect::Get();
 
   // Register routes using the new INSPECT_ROUTE macro
