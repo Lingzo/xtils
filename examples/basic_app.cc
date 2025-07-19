@@ -40,7 +40,7 @@ class SimpleService : public xtils::Service {
       LogThis();
     });
 
-    using namespace xtils::time_utils;
+    using namespace xtils::time;
     for (int i = 0; i <= 10; i++) {
       auto t1 = steady::GetCurrentMs();
       int ms = 1000 * i;

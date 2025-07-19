@@ -7,50 +7,6 @@
 
 #include "xtils/tasks/thread_task_runner.h"
 #include "xtils/utils/json.h"
-#ifdef INSPECT_DISABLE
-#define INSPECT_ROUTE(path, description, handler)
-#define INSPECT_STATIC(path, content, content_type)
-#define INSPECT_DUAL_ROUTE(path, description, handler)
-#define INSPECT_SIMPLE(path, expr)
-#define INSPECT_PUBLISH_TEXT(url, message)
-#define INSPECT_PUBLISH_BINARY(url, message)
-#else
-// Convenience macros for route registration
-
-// Register route with description - recommended for API documentation
-#define INSPECT_ROUTE(path, description, handler)                           \
-  do {                                                                      \
-    xtils::Inspect::Get().RouteWithDescription(path, description, handler); \
-  } while (0)
-
-// Register static content
-#define INSPECT_STATIC(path, content, content_type)            \
-  do {                                                         \
-    xtils::Inspect::Get().Static(path, content, content_type); \
-  } while (0)
-
-// Register combined HTTP and WebSocket handlers for the same path
-#define INSPECT_DUAL_ROUTE(path, description, handler)                     \
-  do {                                                                     \
-    xtils::Inspect::Get().RouteWithDescription(path, description, handler, \
-                                               true);                      \
-  } while (0)
-
-#define INSPECT_SIMPLE(path, expr)                                             \
-  do {                                                                         \
-    auto handler = [&](const Inspect::Request &req, Inspect::Response &resp) { \
-      (expr);                                                                  \
-      resp = Inspect::TextResponse("");                                        \
-    };                                                                         \
-    INSPECT_ROUTE(path, "empty response", handler);                            \
-  } while (0)
-
-// WebSocket publishing to all subscribers
-#define INSPECT_PUBLISH_TEXT(url, message) \
-  xtils::Inspect::Get().Publish(url, message, true)
-#define INSPECT_PUBLISH_BINARY(url, message) \
-  xtils::Inspect::Get().Publish(url, message, false)
-#endif
 
 namespace xtils {
 
@@ -211,3 +167,49 @@ class Inspect {
   ~Inspect();
 };
 }  // namespace xtils
+
+#ifdef INSPECT_DISABLE
+#define INSPECT_ROUTE(path, description, handler)
+#define INSPECT_STATIC(path, content, content_type)
+#define INSPECT_DUAL_ROUTE(path, description, handler)
+#define INSPECT_SIMPLE(path, expr)
+#define INSPECT_PUBLISH_TEXT(url, message)
+#define INSPECT_PUBLISH_BINARY(url, message)
+#else
+// Convenience macros for route registration
+
+// Register route with description - recommended for API documentation
+#define INSPECT_ROUTE(path, description, handler)                           \
+  do {                                                                      \
+    xtils::Inspect::Get().RouteWithDescription(path, description, handler); \
+  } while (0)
+
+// Register static content
+#define INSPECT_STATIC(path, content, content_type)            \
+  do {                                                         \
+    xtils::Inspect::Get().Static(path, content, content_type); \
+  } while (0)
+
+// Register combined HTTP and WebSocket handlers for the same path
+#define INSPECT_DUAL_ROUTE(path, description, handler)                     \
+  do {                                                                     \
+    xtils::Inspect::Get().RouteWithDescription(path, description, handler, \
+                                               true);                      \
+  } while (0)
+
+#define INSPECT_SIMPLE(path, expr)                                             \
+  do {                                                                         \
+    auto handler = [&](const Inspect::Request &req, Inspect::Response &resp) { \
+      (expr);                                                                  \
+      resp = xtils::Inspect::TextResponse("");                                 \
+    };                                                                         \
+    xtils::Inspect::Get().RouteWithDescription(path, "empty response",         \
+                                               handler);                       \
+  } while (0)
+
+// WebSocket publishing to all subscribers
+#define INSPECT_PUBLISH_TEXT(url, message) \
+  xtils::Inspect::Get().Publish(url, message, true)
+#define INSPECT_PUBLISH_BINARY(url, message) \
+  xtils::Inspect::Get().Publish(url, message, false)
+#endif

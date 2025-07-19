@@ -4,7 +4,7 @@
 #include <limits>
 
 namespace xtils {
-namespace time_utils {
+namespace time {
 
 // Steady clock utilities implementation
 namespace steady {

@@ -99,13 +99,13 @@ void SystemTimerExample() {
   });
 
   // 3. Show time conversion utilities
-  auto system_now = time_utils::system::Now();
-  auto steady_now = time_utils::steady::Now();
+  auto system_now = time::system::Now();
+  auto steady_now = time::steady::Now();
 
   LogI("System time (UTC) in ms: %llu",
-       static_cast<unsigned long long>(time_utils::system::ToMs(system_now)));
+       static_cast<unsigned long long>(time::system::ToMs(system_now)));
   LogI("Steady time in ms: %llu",
-       static_cast<unsigned long long>(time_utils::steady::ToMs(steady_now)));
+       static_cast<unsigned long long>(time::steady::ToMs(steady_now)));
 
   // 4. Repeating UTC timer
   int utc_repeat_count = 0;
