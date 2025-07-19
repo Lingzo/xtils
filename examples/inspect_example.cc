@@ -14,7 +14,7 @@ using namespace xtils;
 static std::atomic<int> global_counter{0};
 
 // Example handler functions
-Inspect::Response HandleHello(const Inspect::Request &req) {
+void HandleHello(const Inspect::Request &req, Inspect::Response &resp) {
   xtils::Json response;
   response["message"] = "Hello, World!";
   response["path"] = req.path;
@@ -29,14 +29,15 @@ Inspect::Response HandleHello(const Inspect::Request &req) {
     response["query"] = query_json;
   }
 
-  return Inspect::JsonResponse(response);
+  resp = Inspect::JsonResponse(response);
 }
 
-Inspect::Response HandleUserInfo(const Inspect::Request &req) {
+void HandleUserInfo(const Inspect::Request &req, Inspect::Response &resp) {
   // Extract user ID from query parameters
   auto it = req.query.find("id");
   if (it == req.query.end()) {
-    return Inspect::ErrorResponse("Missing 'id' parameter", "400 Bad Request");
+    resp = Inspect::ErrorResponse("Missing 'id' parameter", "400 Bad Request");
+    return;
   }
 
   std::string user_id = it->second;
@@ -47,10 +48,10 @@ Inspect::Response HandleUserInfo(const Inspect::Request &req) {
   user_info["email"] = "user" + user_id + "@example.com";
   user_info["active"] = true;
 
-  return Inspect::JsonResponse(user_info);
+  resp = Inspect::JsonResponse(user_info);
 }
 
-Inspect::Response HandleStatus(const Inspect::Request &req) {
+void HandleStatus(const Inspect::Request &req, Inspect::Response &resp) {
   xtils::Json status;
   status["server"] = "running";
   status["timestamp"] = std::time(nullptr);
@@ -60,17 +61,17 @@ Inspect::Response HandleStatus(const Inspect::Request &req) {
   // Get server info from Inspect
   status["inspect_info"] = Inspect::Get().GetServerInfo();
 
-  return Inspect::JsonResponse(status);
+  resp = Inspect::JsonResponse(status);
 }
 
-Inspect::Response HandleEcho(const Inspect::Request &req) {
+void HandleEcho(const Inspect::Request &req, Inspect::Response &resp) {
   if (req.method == "POST") {
     xtils::Json echo_response;
     echo_response["echo"] = req.body;
     echo_response["content_length"] = req.body.length();
-    return Inspect::JsonResponse(echo_response);
+    resp = Inspect::JsonResponse(echo_response);
   } else {
-    return Inspect::ErrorResponse("Only POST method supported",
+    resp = Inspect::ErrorResponse("Only POST method supported",
                                   "405 Method Not Allowed");
   }
 }
@@ -96,20 +97,20 @@ int main() {
 
   // Register a simple lambda route
   INSPECT_ROUTE("/api/time", "Get current timestamp",
-                [](const Inspect::Request &req) {
+                [](const Inspect::Request &req, Inspect::Response &resp) {
                   xtils::Json time_response;
                   time_response["timestamp"] = std::time(nullptr);
                   time_response["iso_time"] = "2024-01-01T00:00:00Z";
-                  return Inspect::JsonResponse(time_response);
+                  resp = Inspect::JsonResponse(time_response);
                 });
 
   // Counter API for WebSocket demonstration
   INSPECT_ROUTE("/api/counter", "Get or increment global counter",
-                [](const Inspect::Request &req) {
+                [](const Inspect::Request &req, Inspect::Response &resp) {
                   if (req.method == "GET") {
                     xtils::Json response;
                     response["counter"] = global_counter.load();
-                    return Inspect::JsonResponse(response);
+                    resp = Inspect::JsonResponse(response);
                   } else if (req.method == "POST") {
                     int new_value = ++global_counter;
                     xtils::Json response;
@@ -121,18 +122,21 @@ int main() {
                     ws_message["type"] = "counter_update";
                     ws_message["counter"] = new_value;
 
-                    return Inspect::JsonResponse(response);
+                    resp = Inspect::JsonResponse(response);
+                  } else {
+                    resp = Inspect::ErrorResponse("Method not allowed",
+                                                  "405 Method Not Allowed");
                   }
-                  return Inspect::ErrorResponse("Method not allowed",
-                                                "405 Method Not Allowed");
                 });
 
-  INSPECT_DUAL_ROUTE(
-      "/ping", "支持http和ws",
-      [](const Inspect::Request &req) { return Inspect::TextResponse("pong"); },
-      [](const Inspect::WebSocketRequest &req) {
-        return Inspect::Response(req.data, req.is_text);
-      });
+  INSPECT_DUAL_ROUTE("/ping", "支持http和ws",
+                     [](const Inspect::Request &req, Inspect::Response &resp) {
+                       if (req.is_websocket) {
+                         resp = Inspect::Response(req.body, req.is_text);
+                       } else {
+                         resp = Inspect::TextResponse("pong");
+                       }
+                     });
 
   // Add a simple demo page
   std::string demo_html = R"(<!DOCTYPE html>

@@ -140,8 +140,13 @@ void App::init_inspect() {
 
   if (conf().get_bool("xtils.inspect.enable")) {
     INSPECT_ROUTE("/api/config", "config in process",
-                  [this](const Inspect::Request& req) {
-                    return Inspect::JsonResponse(config_.to_json());
+                  [this](const Inspect::Request& req, Inspect::Response& resp) {
+                    resp.sendJson(config_.to_json());
+                  });
+    INSPECT_ROUTE("/api/tracer", "get tracer info",
+                  [this](const Inspect::Request& req, Inspect::Response& resp) {
+                    auto tracer = TRACE_DATA();
+                    resp.sendText(tracer);
                   });
   }
 #endif
