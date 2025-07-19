@@ -34,9 +34,10 @@
 #include <thread>
 #include <vector>
 
+#include "xtils/debug/tracer.h"
 #include "xtils/logging/sink.h"
 
-#define MAX_LINE_LOG_SIZE (1024 * 10)
+#define MAX_LINE_LOG_SIZE (1024)
 #define DATE_BUF_SIZE 26  // yyyy-mm-dd hh:mm:ss.xxxxxx
 
 namespace {
@@ -154,6 +155,7 @@ class Logger::Impl {
   }
 
   void flush() {
+    TRACE_SCOPE("Flushing logs");
     // Process all remaining entries synchronously
     std::queue<LogEntry> temp_queue;
     {
@@ -222,7 +224,7 @@ class Logger::Impl {
     }
   }
 
-  std::string format_log_message(const LogEntry& entry) {
+  inline std::string format_log_message(const LogEntry& entry) {
     const char* filename = entry.file_name.c_str();
     bool use_color = isatty(STDOUT_FILENO);
 
@@ -232,9 +234,9 @@ class Logger::Impl {
       oss << COLORS[entry.level];
     }
 
-    oss << entry.timestamp << " [" << to_string(entry.level) << "] "
-        << entry.tag << " " << entry.function_name << " " << entry.message
-        << " ---- " << filename << ":" << entry.line;
+    oss << to_string(entry.level) << " " << entry.timestamp << " " << entry.tag
+        << " " << entry.function_name << " " << entry.message << " ---- "
+        << filename << ":" << entry.line;
 
     if (use_color) {
       oss << RESET_COLOR;

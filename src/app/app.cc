@@ -1,5 +1,7 @@
 #include "xtils/app/app.h"
 
+#include <unistd.h>
+
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -10,6 +12,7 @@
 
 #include "xtils/app/service.h"
 #include "xtils/debug/inspect.h"
+#include "xtils/debug/tracer.h"
 #include "xtils/logging/logger.h"
 #include "xtils/logging/sink.h"
 #include "xtils/system/signal_handler.h"
@@ -45,6 +48,7 @@ void App::default_config() {
 }
 
 void App::init(int argc, char* argv[]) {
+  TRACE_SCOPE("App:init");
   // Setup signal handlers for graceful shutdown
   system::SignalHandler::Initialize();
 
@@ -93,6 +97,7 @@ void App::init(int argc, char* argv[]) {
 }
 
 void App::init_log() {
+  TRACE_SCOPE("App:init_log");
   if (conf().get_bool("xtils.log.console.enable")) {
     logger::default_logger()->addSink(std::make_unique<logger::ConsoleSink>());
   }
@@ -121,6 +126,7 @@ void App::init_log() {
 
 void App::init_inspect() {
 #ifndef INSPECT_DISABLE
+  TRACE_SCOPE("App:init_inspect");
   if (conf().get_bool("xtils.inspect.enable")) {
     std::string addr = conf().get_string("xtils.inspect.addr");
     int port = conf().get_int("xtils.inspect.port");
@@ -176,6 +182,7 @@ void App::run() {
 }
 
 void App::deinit() {
+  TRACE_SCOPE("App::deinit");
 #ifndef INSPECT_DISABLE
   if (conf().get_bool("xtils.inspect.enable")) {
     Inspect::Get().Stop();
@@ -198,7 +205,10 @@ void App::PostTask(Task task) { tg_->PostTask(task); }
 void App::PostAsyncTask(Task task, Task main) {
   std::weak_ptr<TaskGroup> weak_ptr = tg_;
   tg_->PostAsyncTask([task = task, main = main, weak_ptr]() {
-    task();
+    {
+      TRACE_SCOPE("AsyncTask");
+      task();
+    }
     if (main) {
       if (auto tg = weak_ptr.lock()) {
         tg->PostTask(main);

@@ -22,6 +22,7 @@
 
 #include <algorithm>
 
+#include "xtils/debug/tracer.h"
 #include "xtils/logging/logger.h"
 #include "xtils/logging/watchdog.h"
 
@@ -98,6 +99,7 @@ void UnixTaskRunner::UpdateWatchTasksLocked() {
 }
 
 void UnixTaskRunner::RunImmediateAndDelayedTask() {
+  TRACE_SCOPE("UnixTaskRunner:RunImmediateAndDelayedTask");
   // If locking overhead becomes an issue, add a separate work queue.
   std::function<void()> immediate_task;
   std::function<void()> delayed_task;
@@ -124,6 +126,7 @@ void UnixTaskRunner::RunImmediateAndDelayedTask() {
 }
 
 void UnixTaskRunner::PostFileDescriptorWatches(uint64_t windows_wait_result) {
+  TRACE_SCOPE("UnixTaskRunner::PostFileDescriptorWatches");
   for (size_t i = 0; i < poll_fds_.size(); i++) {
     const PlatformHandle handle = poll_fds_[i].fd;
     if (!(poll_fds_[i].revents & (POLLIN | POLLHUP))) continue;
@@ -180,6 +183,7 @@ int UnixTaskRunner::GetDelayMsToNextTaskLocked() const {
 }
 
 void UnixTaskRunner::PostTask(std::function<void()> task) {
+  TRACE_SCOPE("UnixTaskRunner:PostTask");
   bool was_empty;
   {
     std::lock_guard<std::mutex> lock(lock_);

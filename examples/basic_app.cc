@@ -4,6 +4,8 @@
 #include "xtils/app/app.h"
 #include "xtils/app/service.h"
 #include "xtils/config/config.h"
+#include "xtils/debug/inspect.h"
+#include "xtils/debug/tracer.h"
 #include "xtils/logging/logger.h"
 #include "xtils/tasks/event.h"
 #include "xtils/utils/time_utils.h"
@@ -47,6 +49,11 @@ class SimpleService : public xtils::Service {
         std::this_thread::sleep_for(std::chrono::milliseconds(ms));
       });
     }
+    INSPECT_ROUTE("/basic_app/trace", "get trace info",
+                  [](const xtils::Inspect::Request& req) {
+                    std::string trace_data = TRACE_DATA();
+                    return xtils::Inspect::TextResponse(trace_data);
+                  });
   }
 
   void deinit() override { LogI("Deinit"); }

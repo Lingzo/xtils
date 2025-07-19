@@ -19,6 +19,7 @@
 #include <cassert>
 #include <cstdio>
 
+#include "xtils/debug/tracer.h"
 #include "xtils/utils/file_utils.h"
 
 namespace logger {
@@ -58,6 +59,7 @@ class FileSink::Impl {
   }
 
   void rotate() {
+    TRACE_SCOPE("Rotating logs");
     fflush(logger_file_);
     int fd = fileno(logger_file_);
     fsync(fd);
