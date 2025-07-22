@@ -14,12 +14,12 @@
 #ifdef TRACE_DISABLED
 #define TRACE_SCOPE(name)
 #define TRACE_INSTANT(name)
-#define TRACE_DATA() ""
+#define TRACE_DATA(p_str)
 #define TRACE_SAVE(filename)
 #else
 #define TRACE_SCOPE(name) TraceScopeRAII __trace_scope_raii_##__LINE__(name)
 #define TRACE_INSTANT(name) Tracer::instance().recordInstant(name)
-#define TRACE_DATA() Tracer::instance().data()
+#define TRACE_DATA(p_str) Tracer::instance().data(p_str)
 #define TRACE_SAVE(filename) Tracer::instance().save(filename)
 #endif
 
@@ -106,26 +106,28 @@ class Tracer {
     pushEvent(e);
   }
 
-  std::string data() {
+  void data(std::string* out) {
     size_t snapshot = write_index_.load(std::memory_order_acquire);
     size_t count = full_ ? MAX_EVENTS : snapshot;
     size_t start = full_ ? snapshot % MAX_EVENTS : 0;
 
-    std::stringstream out;
-    out << "{\"traceEvents\":[\n";
+    std::stringstream ss;
+    ss << "{\"traceEvents\":[\n";
     for (size_t i = 0; i < count; ++i) {
       size_t idx = (start + i) % MAX_EVENTS;
-      out << events_[idx].toJSON();
-      if (i != count - 1) out << ",";
-      out << "\n";
+      ss << events_[idx].toJSON();
+      if (i != count - 1) ss << ",";
+      ss << "\n";
     }
-    out << "]}\n";
-    return out.str();
+    ss << "]}\n";
+    *out = ss.str();
   }
 
   void save(const std::string& filename) {
     std::ofstream out(filename);
-    out << data();
+    std::string str;
+    data(&str);
+    out << str;
     out.close();
   }
   void registerThreadName() {

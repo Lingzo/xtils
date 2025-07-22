@@ -64,27 +64,37 @@ add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE xtils::xtils)
 ```
 
-### Method 2: Using pkg-config
-
-If you're using a build system that supports pkg-config:
+### Method 2: Using directly
 
 ```bash
-g++ -std=c++17 main.cpp $(pkg-config --cflags --libs xtils) -o my_app
+g++ -std=c++17 main.cpp -I/path/xtils/include -L/path/xitls/lib/ -lxtils -o my_app
 ```
 
 ### Example Usage in Code
 
 ```cpp
-#include <xtils/json.h>
-#include <xtils/config.h>
+#include <xtils/app/service.h>
 #include <iostream>
 
-int main() {
+int main(int argc, char** argv) {
     // Example usage of xtils functionality
     // (Add specific examples based on your library's API)
 
     std::cout << "Using xtils library successfully!" << std::endl;
+    // setup_srv(s);
+    run_srv(argc,argv);
     return 0;
+}
+```
+
+or
+
+```cpp
+#include <xtils/app/service.h>
+
+// no need main, auto call by framework
+void app_main(int argc, char** argv) {
+    // setup_srv(s);
 }
 ```
 

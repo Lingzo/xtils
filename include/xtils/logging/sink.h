@@ -23,13 +23,13 @@
 namespace logger {
 struct Sink {
   virtual ~Sink() {}
-  virtual void write_log(const char* buf, std::size_t start,
+  virtual void write(const char* buf, std::size_t start,
                          std::size_t len) = 0;  // noblocking write
   virtual void flush() = 0;
 };
 class ConsoleSink : public Sink {
  public:
-  void write_log(const char* buf, std::size_t start, std::size_t len) override;
+  void write(const char* buf, std::size_t start, std::size_t len) override;
   void flush() override;
 };
 class FileSink : public Sink {
@@ -37,7 +37,7 @@ class FileSink : public Sink {
   FileSink(const std::string& path, std::size_t max_bytes,
            std::size_t max_items);
   ~FileSink();
-  void write_log(const char* buf, std::size_t start, std::size_t len) override;
+  void write(const char* buf, std::size_t start, std::size_t len) override;
   void flush() override;
 
  private:

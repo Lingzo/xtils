@@ -1,4 +1,7 @@
 #include <chrono>
+#include <cstdint>
+#include <list>
+#include <memory>
 #include <thread>
 
 #include "xtils/app/app.h"
@@ -14,7 +17,6 @@ class SimpleService : public xtils::Service {
  public:
   SimpleService() : xtils::Service("simple") {
     config.define("params", "params", 0);
-    config.define("p.level", "p.level", 2);
     config.define("p.level.1", "p.level.1", false);
     config.define("p.level.3", "p.level.3", "string");
   }
@@ -52,20 +54,26 @@ class SimpleService : public xtils::Service {
     INSPECT_ROUTE(
         "/basic_app/trace", "get trace info",
         [](const xtils::Inspect::Request& req, xtils::Inspect::Response& resp) {
-          std::string trace_data = TRACE_DATA();
-          resp.sendText(trace_data);
+          std::string tracer;
+          TRACE_DATA(&tracer);
+          resp.sendText(tracer);
         });
   }
 
   void deinit() override { LogI("Deinit"); }
 };
 
-int main(int argc, char* argv[]) {
-  auto app = xtils::App::instance();
-  app->registor<SimpleService>();
+// call by xtils
+void app_version(uint32_t& major, uint32_t& minor, uint32_t& patch,
+                 std::string& build_time) {
+  major = 0;
+  minor = 1;
+  patch = 2;
+  build_time = __DATE__ " " __TIME__;
+}
 
-  app->init(argc, argv);
-
-  app->run();
-  return 0;
+// call by xtils
+void app_main(int argc, char** argv) {
+  // setup service
+  setup_srv(std::make_shared<SimpleService>());
 }

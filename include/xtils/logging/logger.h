@@ -65,6 +65,7 @@ class Logger {
                        const std::string& message);
   void write_log_sync(const char* tag, const source_loc& loc, log_level level,
                       const std::string& message);
+  void write_raw(const std::string& message);
 
   void addSink(std::unique_ptr<Sink> s);
 

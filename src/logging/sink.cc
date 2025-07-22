@@ -24,9 +24,8 @@
 
 namespace logger {
 
-void ConsoleSink::write_log(const char* buf, std::size_t start,
-                            std::size_t len) {
-  int n = write(STDOUT_FILENO, buf + start, len);
+void ConsoleSink::write(const char* buf, std::size_t start, std::size_t len) {
+  int n = ::write(STDOUT_FILENO, buf + start, len);
   assert(n == len);
 }
 
@@ -46,7 +45,7 @@ class FileSink::Impl {
     fsync(fd);
     fclose(logger_file_);
   }
-  void write_log(const char* buf, std::size_t start, std::size_t len) {
+  void write(const char* buf, std::size_t start, std::size_t len) {
     if (byte_counts_ > max_bytes_) {
       rotate();
     }
@@ -107,8 +106,8 @@ FileSink::FileSink(const std::string& path, std::size_t max_bytes,
 }
 
 FileSink::~FileSink() { delete impl; }
-void FileSink::write_log(const char* buf, std::size_t start, std::size_t len) {
-  impl->write_log(buf, start, len);
+void FileSink::write(const char* buf, std::size_t start, std::size_t len) {
+  impl->write(buf, start, len);
 }
 
 void FileSink::flush() { impl->flush(); }

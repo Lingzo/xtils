@@ -4,9 +4,7 @@
 
 #include <cstdint>
 #include <functional>
-#include <initializer_list>
 #include <memory>
-#include <vector>
 
 #include "xtils/config/config.h"
 #include "xtils/tasks/event.h"
@@ -23,22 +21,15 @@ class App {
 
  public:
   ~App() = default;
-  static App* instance();
+  static App* ins();
 
-  void init(int argc, char* argv[]);
-  void run();
-  template <typename T>
-  std::shared_ptr<T> registor() {
-    auto p = std::make_shared<T>();
-    registor(p);
-    return p;
-  }
-  void registor(std::initializer_list<std::shared_ptr<Service>> services) {
-    for (auto& service : services) {
-      service_.emplace_back(service);
-    }
-  }
-  void registor(std::shared_ptr<Service> p) { service_.emplace_back(p); }
+  void registor(std::list<std::shared_ptr<Service>> services);
+  void registor(std::shared_ptr<Service> p);
+
+ public:
+  // until shutdown
+  void run(int argc, char* argv[]);
+
   void PostTask(Task task);
   void PostAsyncTask(Task task, Task main = nullptr);
 
@@ -53,20 +44,25 @@ class App {
   const Config& conf() { return config_; }
 
  private:
+  void init(int argc, char* argv[]);
+  void run();
+
   void deinit();
 
   // init
   void default_config();
   void init_log();
   void init_inspect();
+  void print_banner();
 
  private:
   Config config_;
   std::unique_ptr<EventManager> em_;
   std::shared_ptr<TaskGroup> tg_;
   std::unique_ptr<SteadyTimer> timer_;
-  std::vector<std::shared_ptr<Service>> service_;
+  std::list<std::shared_ptr<Service>> service_;
   bool running_ = false;
+  bool initialized_ = false;
 };
 
 }  // namespace xtils

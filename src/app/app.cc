@@ -7,6 +7,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -20,12 +21,13 @@
 #include "xtils/tasks/task_group.h"
 #include "xtils/tasks/timer.h"
 #include "xtils/utils/file_utils.h"
+#include "xtils/utils/json.h"
 
 namespace xtils {
 
 App::App() { default_config(); }
 
-App* App::instance() {
+App* App::ins() {
   static App app;
   return &app;
 }
@@ -60,6 +62,7 @@ void App::init(int argc, char* argv[]) {
                      opt.default_value, opt.required);
     }
   }
+
   // Parse command line arguments and load configuration
   if (!config_.parse_args(argc, argv)) {
     std::cerr << "Failed to parse command line arguments" << std::endl;
@@ -78,13 +81,9 @@ void App::init(int argc, char* argv[]) {
     exit(1);
   }
 
-  // sub config
-  for (auto& s : service_) {
-    auto sub = config_.get(s->name);
-    if (sub) {
-      s->config.parse_json(*sub);
-    }
-  }
+  init_log();
+  print_banner();
+  init_inspect();
 
   // init thread pool
   int threads_size = conf().get_int("xtils.threads");
@@ -92,8 +91,14 @@ void App::init(int argc, char* argv[]) {
   tg_ = std::make_unique<TaskGroup>(threads_size);
   em_ = std::make_unique<EventManager>(tg_.get());
   timer_ = std::make_unique<SteadyTimer>(tg_.get());
-  init_log();
-  init_inspect();
+  // sub config
+  for (auto& s : service_) {
+    auto sub = config_.get(s->name);
+    if (sub) {
+      s->config.parse_json(*sub);
+    }
+  }
+  initialized_ = true;
 }
 
 void App::init_log() {
@@ -145,13 +150,29 @@ void App::init_inspect() {
                   });
     INSPECT_ROUTE("/api/tracer", "get tracer info",
                   [this](const Inspect::Request& req, Inspect::Response& resp) {
-                    auto tracer = TRACE_DATA();
+                    std::string tracer;
+                    TRACE_DATA(&tracer);
                     resp.sendText(tracer);
+                  });
+    INSPECT_ROUTE("/api/version", "get version info",
+                  [this](const Inspect::Request& req, Inspect::Response& resp) {
+                    uint32_t major;
+                    uint32_t minor;
+                    uint32_t patch;
+                    std::string build_time;
+                    app_version(major, minor, patch, build_time);
+                    Json version;
+                    version["major"] = major;
+                    version["minor"] = minor;
+                    version["patch"] = patch;
+                    version["build_time"] = build_time;
+                    resp.sendJson(version);
                   });
   }
 #endif
 }
 void App::run() {
+  CHECK(initialized_);
   if (running_) {
     LogW("App is already running");
     return;
@@ -233,4 +254,46 @@ void App::every(uint32_t ms, TimerCallback cb) {
 void App::delay(uint32_t ms, TimerCallback cb) {
   timer_->SetRelativeTimer(ms, cb, TimerType::kOneShot);
 }
+
+void App::print_banner() {
+  uint32_t major;
+  uint32_t minor;
+  uint32_t patch;
+  std::string build_time;
+  app_version(major, minor, patch, build_time);
+  const std::string fmt = R"(
+================ XTILS =================
+  Version : v%d.%d.%d
+  Build   : %s
+  Service : %s
+========================================
+)";
+  char banner[1024] = {0};
+  std::stringstream ss;
+  for (auto& s : service_) {
+    ss << s->name << " ";
+  }
+  std::string names = ss.str();
+  snprintf(banner, sizeof(banner), fmt.c_str(), major, minor, patch,
+           build_time.c_str(), names.empty() ? "None" : names.c_str());
+  logger::default_logger()->write_raw(banner);
+}
+
+void App::registor(std::list<std::shared_ptr<Service>> services) {
+  CHECK(!initialized_ && !running_);
+  for (auto& p : services) {
+    registor(p);
+  }
+}
+
+void App::registor(std::shared_ptr<Service> p) {
+  CHECK(!initialized_ && !running_);
+  service_.push_back(p);
+}
+
+void App::run(int argc, char* argv[]) {
+  init(argc, argv);
+  run();
+}
+
 }  // namespace xtils

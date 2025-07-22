@@ -149,6 +149,15 @@ class Logger::Impl {
     process_log_entry(entry);
   }
 
+  void write_raw(const std::string& message) {
+    std::lock_guard<std::mutex> lock(sinks_mutex_);
+    for (auto& sink : sinks_) {
+      if (sink) {
+        sink->write(message.c_str(), 0, message.size());
+      }
+    }
+  }
+
   void addSink(std::unique_ptr<Sink> s) {
     std::lock_guard<std::mutex> lock(sinks_mutex_);
     sinks_.emplace_back(std::move(s));
@@ -219,7 +228,7 @@ class Logger::Impl {
       write(STDOUT_FILENO, formatted_message.c_str(), formatted_message.size());
     for (auto& sink : sinks_) {
       if (sink) {
-        sink->write_log(formatted_message.c_str(), 0, formatted_message.size());
+        sink->write(formatted_message.c_str(), 0, formatted_message.size());
       }
     }
   }
@@ -278,6 +287,10 @@ void Logger::write_log_sync(const char* tag, const source_loc& loc,
                             log_level level, const std::string& message) {
   impl_->write_log_sync(tag, loc, level, message);
 }
+void Logger::write_raw(const std::string& message) {
+  impl_->write_raw(message);
+}
+
 void Logger::addSink(std::unique_ptr<Sink> s) { impl_->addSink(std::move(s)); }
 
 void Logger::flush() { impl_->flush(); }
