@@ -4,10 +4,10 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdarg>
 #include <cstdint>
 #include <fstream>
 #include <list>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -30,8 +30,8 @@ class Tracer {
     std::string value;
   };
   struct Event {
-    const char* name;
-    const char* phase;
+    const char *name;
+    const char *phase;
     uint64_t ts_us;
     uint64_t dur_us;
     uint32_t pid;
@@ -40,34 +40,41 @@ class Tracer {
     std::list<KV> args;
 
     std::string toJSON() const {
-      char buffer[512] = {0};
-      int len = snprintf(buffer, sizeof(buffer),
-                         R"({"name":"%s","cat":"function","ph":"%s","ts":%lu)",
-                         name, phase, ts_us);
+      std::string json;
+      json.reserve(512);
+      auto format_str = [](const char *fmt, ...) {
+        char buffer[128] = {0};
+        va_list args;
+        va_start(args, fmt);
+        vsnprintf(buffer, sizeof(buffer), fmt, args);
+        va_end(args);
+        return std::string(buffer);
+      };
+
+      json.append(
+          format_str(R"({"name":"%s","cat":"function","ph":"%s","ts":%lu)",
+                     name, phase, ts_us));
       if (phase[0] == 'X') {
-        len += snprintf(buffer + len, sizeof(buffer) - len, R"(,"dur":%lu)",
-                        dur_us);
+        json.append(format_str(R"(,"dur":%lu)", dur_us));
       }
-      len += snprintf(buffer + len, sizeof(buffer) - len,
-                      R"(,"pid":%u,"tid":%u)", pid, tid);
+      json.append(format_str(R"(,"pid":%u,"tid":%u)", pid, tid));
 
       // args
-      std::stringstream ss;
-      ss << "{";
-      for (const auto& kv : args) {
-        ss << "\"" << kv.name << "\":\"" << kv.value << "\",";
+      std::string args_str;
+      auto append = [&](const std::string &str) { args_str.append(str); };
+      append("{");
+      for (const auto &kv : args) {
+        append(format_str(R"("%s":"%s",)", kv.name.c_str(), kv.value.c_str()));
       }
-      ss << "\"cpu\":" << cpu[0] << ",";
-      ss << "\"cpu2\":" << cpu[1];
-      ss << "}";
-      std::string args_str = ss.str();
+      append(format_str(R"("cpu": %d,)", cpu[0]));
+      append(format_str(R"("cpu2": %d})", cpu[1]));
+
       if (!args_str.empty()) {
-        len += snprintf(buffer + len, sizeof(buffer) - len, R"(,"args":%s})",
-                        args_str.c_str());
+        json.append(format_str(R"(,"args":%s})", args_str.c_str()));
       } else {
-        len += snprintf(buffer + len, sizeof(buffer) - len, "}");
+        json.append("}");
       }
-      return std::string(buffer);
+      return json;
     }
   };
 
@@ -77,27 +84,27 @@ class Tracer {
 
   ~Tracer() { delete[] events_; }
 
-  static Tracer& instance() {
+  static Tracer &instance() {
     static Tracer inst;
     return inst;
   }
 
-  void recordInstant(const char* name) {
+  void recordInstant(const char *name) {
     registerThreadName();
     Event e{name, "i", now_us(), 0, pid(), tid(), {cpu(), 0}};
     pushEvent(e);
   }
 
-  void begin(const char* name) {
+  void begin(const char *name) {
     registerThreadName();
     uint64_t ts = now_us();
-    ThreadLocalData& data = tls();
+    ThreadLocalData &data = tls();
     data.stack.push_back({name, "X", ts, 0, pid(), tid(), {cpu(), 0}});
   }
 
   void end() {
     uint64_t ts = now_us();
-    ThreadLocalData& data = tls();
+    ThreadLocalData &data = tls();
     if (data.stack.empty()) return;
     Event e = data.stack.back();
     data.stack.pop_back();
@@ -106,24 +113,25 @@ class Tracer {
     pushEvent(e);
   }
 
-  void data(std::string* out) {
+  void data(std::string *out) {
     size_t snapshot = write_index_.load(std::memory_order_acquire);
     size_t count = full_ ? MAX_EVENTS : snapshot;
     size_t start = full_ ? snapshot % MAX_EVENTS : 0;
 
-    std::stringstream ss;
-    ss << "{\"traceEvents\":[\n";
+    out->clear();
+    out->reserve(count * 512);
+    auto append = [&](const std::string &str) { out->append(str); };
+    append("{\"traceEvents\":[\n");
     for (size_t i = 0; i < count; ++i) {
       size_t idx = (start + i) % MAX_EVENTS;
-      ss << events_[idx].toJSON();
-      if (i != count - 1) ss << ",";
-      ss << "\n";
+      append(events_[idx].toJSON());
+      if (i != count - 1) append(",");
+      append("\n");
     }
-    ss << "]}\n";
-    *out = ss.str();
+    append("]}\n");
   }
 
-  void save(const std::string& filename) {
+  void save(const std::string &filename) {
     std::ofstream out(filename);
     std::string str;
     data(&str);
@@ -131,7 +139,7 @@ class Tracer {
     out.close();
   }
   void registerThreadName() {
-    ThreadLocalData& data = tls();
+    ThreadLocalData &data = tls();
     if (data.thread_metadata_registered) return;
 
     data.thread_metadata_registered = true;
@@ -158,7 +166,7 @@ class Tracer {
     bool thread_metadata_registered = false;
   };
 
-  static ThreadLocalData& tls() {
+  static ThreadLocalData &tls() {
     thread_local ThreadLocalData data;
     return data;
   }
@@ -175,7 +183,7 @@ class Tracer {
     static uint32_t cached_pid = static_cast<uint32_t>(getpid());
     return cached_pid;
   }
-  void pushEvent(const Event& e) {
+  void pushEvent(const Event &e) {
     size_t idx = write_index_.fetch_add(1, std::memory_order_relaxed);
     if (idx >= MAX_EVENTS) {
       full_ = true;
@@ -187,13 +195,13 @@ class Tracer {
   }
 
   std::atomic<size_t> write_index_;
-  Event* events_;
+  Event *events_;
   bool full_;
 };
 
 // RAII 范围事件
 class TraceScopeRAII {
  public:
-  TraceScopeRAII(const char* name) { Tracer::instance().begin(name); }
+  TraceScopeRAII(const char *name) { Tracer::instance().begin(name); }
   ~TraceScopeRAII() { Tracer::instance().end(); }
 };
