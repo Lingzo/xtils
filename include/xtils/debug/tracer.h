@@ -6,10 +6,9 @@
 #include <chrono>
 #include <cstdarg>
 #include <cstdint>
+#include <forward_list>
 #include <fstream>
-#include <list>
 #include <string>
-#include <vector>
 
 #ifdef TRACE_DISABLED
 #define TRACE_SCOPE(name)
@@ -36,8 +35,9 @@ class Tracer {
     uint64_t dur_us;
     uint32_t pid;
     uint32_t tid;
-    uint32_t cpu[2];
-    std::list<KV> args;
+    uint32_t cpu;
+    uint32_t cpu2;
+    std::forward_list<KV> args;
 
     std::string toJSON() const {
       std::string json;
@@ -62,18 +62,21 @@ class Tracer {
       // args
       std::string args_str;
       auto append = [&](const std::string &str) { args_str.append(str); };
-      append("{");
       for (const auto &kv : args) {
         append(format_str(R"("%s":"%s",)", kv.name.c_str(), kv.value.c_str()));
       }
-      append(format_str(R"("cpu": %d,)", cpu[0]));
-      append(format_str(R"("cpu2": %d})", cpu[1]));
-
-      if (!args_str.empty()) {
-        json.append(format_str(R"(,"args":%s})", args_str.c_str()));
-      } else {
-        json.append("}");
+      if (phase[0] == 'X') {
+        append(format_str(R"("cpu":%d,)", cpu));
+        append(format_str(R"("cpu2":%d)", cpu2));
+      } else if (phase[0] == 'i') {
+        append(format_str(R"("cpu":%d)", cpu));
+      } else if (!args_str.empty()) {
+        args_str.pop_back();
       }
+      if (!args_str.empty()) {
+        json.append(format_str(R"(,"args":{%s})", args_str.c_str()));
+      }
+      json.append("}");
       return json;
     }
   };
@@ -91,25 +94,7 @@ class Tracer {
 
   void recordInstant(const char *name) {
     registerThreadName();
-    Event e{name, "i", now_us(), 0, pid(), tid(), {cpu(), 0}};
-    pushEvent(e);
-  }
-
-  void begin(const char *name) {
-    registerThreadName();
-    uint64_t ts = now_us();
-    ThreadLocalData &data = tls();
-    data.stack.push_back({name, "X", ts, 0, pid(), tid(), {cpu(), 0}});
-  }
-
-  void end() {
-    uint64_t ts = now_us();
-    ThreadLocalData &data = tls();
-    if (data.stack.empty()) return;
-    Event e = data.stack.back();
-    data.stack.pop_back();
-    e.dur_us = ts - e.ts_us;
-    e.cpu[1] = cpu();  // end cpu
+    Event e{name, "i", now_us(), 0, pid(), tid(), cpu()};
     pushEvent(e);
   }
 
@@ -140,9 +125,10 @@ class Tracer {
   }
   void registerThreadName() {
     ThreadLocalData &data = tls();
-    if (data.thread_metadata_registered) return;
+    size_t snapshot = write_index_.load(std::memory_order_acquire);
+    if (snapshot - data.meta_idx < MAX_EVENTS && data.meta_idx != 0) return;
 
-    data.thread_metadata_registered = true;
+    data.meta_idx = snapshot;
 
     uint32_t thread_id = tid();
     char name[32];
@@ -155,15 +141,35 @@ class Tracer {
     meta.dur_us = 0;
     meta.pid = pid();
     meta.tid = thread_id;
-    meta.args.push_back({"name", thread_name});
+    meta.args.push_front({"name", thread_name});
 
     pushEvent(meta);
   }
 
  private:
+  friend class TraceScopeRAII;
+  void begin(const char *name) {
+    ThreadLocalData &data = tls();
+    registerThreadName();
+    uint64_t ts = now_us();
+    data.stack.push_front({name, "X", ts, 0, pid(), tid(), cpu()});
+  }
+
+  void end() {
+    uint64_t ts = now_us();
+    ThreadLocalData &data = tls();
+    if (data.stack.empty()) return;
+    Event e = data.stack.front();
+    data.stack.pop_front();
+    e.dur_us = ts - e.ts_us;
+    e.cpu2 = cpu();  // end cpu
+    pushEvent(e);
+  }
+
+ private:
   struct ThreadLocalData {
-    std::vector<Event> stack;
-    bool thread_metadata_registered = false;
+    std::forward_list<Event> stack;
+    size_t meta_idx = 0;
   };
 
   static ThreadLocalData &tls() {
@@ -187,9 +193,6 @@ class Tracer {
     size_t idx = write_index_.fetch_add(1, std::memory_order_relaxed);
     if (idx >= MAX_EVENTS) {
       full_ = true;
-      if (idx % MAX_EVENTS == 0) {
-        tls().thread_metadata_registered = false;
-      }
     }
     events_[idx % MAX_EVENTS] = e;
   }

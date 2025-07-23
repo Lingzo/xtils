@@ -20,7 +20,12 @@ class SimpleService : public xtils::Service {
     config.define("p.level.1", "p.level.1", false);
     config.define("p.level.3", "p.level.3", "string");
   }
-
+  int fib(int n) {
+    TRACE_SCOPE("Fib");
+    if (n <= 1) return n;
+    std::this_thread::sleep_for(std::chrono::milliseconds(n * 10));
+    return fib(n - 1) + fib(n - 2);
+  }
   void init() override {
     LogI("Compenets Init");
     LogI("params is %d", config.get<int>("params"));
@@ -37,8 +42,9 @@ class SimpleService : public xtils::Service {
       ctx->PostAsyncTask([this, e]() { ctx->emit(e); });
     });
 
-    ctx->PostAsyncTask([] {
-      std::this_thread::sleep_for(std::chrono::seconds(3));
+    ctx->PostAsyncTask([this] {
+      TRACE_SCOPE("Task");
+      fib(10);
       LogThis();
     });
 
