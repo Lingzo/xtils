@@ -33,18 +33,12 @@ StateId FSM::addState(std::unique_ptr<State> state) {
     }
 
     const std::string& name = state->name();
-    StateId id = state->id();
-
     // Check for name conflicts
     if (name_to_id_.find(name) != name_to_id_.end()) {
       throw FSMException("State with name '" + name + "' already exists");
     }
-
-    // Check for ID conflicts (shouldn't happen with proper ID generation)
-    if (states_.find(id) != states_.end()) {
-      throw FSMException("State with ID " + std::to_string(id) +
-                         " already exists");
-    }
+    StateId id = generateId();
+    state->id_ = id;
 
     name_to_id_[name] = id;
     states_[id] = std::move(state);
@@ -272,15 +266,16 @@ std::string FSM::toDotGraph() const {
   return withLock([&]() -> std::string {
     std::stringstream ss;
     ss << "digraph FSM {\n";
-    ss << "  rankdir=LR;\n";
+    ss << "rankdir=LR;\n";
 
     // Add states
     for (const auto& [id, state] : states_) {
-      ss << "  \"" << state->name() << "\"";
+      ss << id << " [label=\"" << state->name();
       if (id == current_state_id_) {
-        ss << " [style=filled,fillcolor=lightblue]";
+        ss << "\",style=filled,color=red];\n";
+      } else {
+        ss << "\"];\n";
       }
-      ss << ";\n";
     }
 
     // Add transitions
@@ -289,8 +284,7 @@ std::string FSM::toDotGraph() const {
         for (const auto& transition : transitions) {
           State* target = getState(transition.target_state_id);
           if (target) {
-            ss << "  \"" << state->name() << "\" -> \"" << target->name()
-               << "\" [label=\"" << event;
+            ss << state->id_ << " -> " << target->id_ << " [label=\"" << event;
             if (transition.condition && !transition.condition->name().empty()) {
               ss << "\\n" << transition.condition->name();
             }

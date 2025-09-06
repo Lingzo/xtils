@@ -25,6 +25,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -119,24 +120,19 @@ struct TransitionTarget {
 // State class
 class State {
  public:
-  explicit State(std::string name)
-      : name_(std::move(name)), id_(generateId()) {}
+  explicit State(std::string name) : name_(std::move(name)) {}
 
   State(std::string name, StateCallback on_enter)
-      : name_(std::move(name)),
-        id_(generateId()),
-        on_enter_(std::move(on_enter)) {}
+      : name_(std::move(name)), on_enter_(std::move(on_enter)) {}
 
   State(std::string name, StateCallback on_enter, StateCallback on_exit)
       : name_(std::move(name)),
-        id_(generateId()),
         on_enter_(std::move(on_enter)),
         on_exit_(std::move(on_exit)) {}
 
   State(std::string name, StateCallback on_enter, StateCallback on_exit,
         StateCallback on_update)
       : name_(std::move(name)),
-        id_(generateId()),
         on_enter_(std::move(on_enter)),
         on_exit_(std::move(on_exit)),
         on_update_(std::move(on_update)) {}
@@ -169,13 +165,8 @@ class State {
  private:
   friend class FSM;
 
-  static StateId generateId() {
-    static StateId next_id = 0;
-    return ++next_id;
-  }
-
   std::string name_;
-  StateId id_;
+  StateId id_{0};
   StateCallback on_enter_;
   StateCallback on_exit_;
   StateCallback on_update_;
@@ -186,7 +177,7 @@ class State {
 
 // History entry for debugging and logging
 struct HistoryEntry {
-  std::chrono::steady_clock::time_point timestamp;
+  std::int64_t timestamp;  // Timestamp of the event, nanoseconds since epoch
   StateId from_state;
   StateId to_state;
   EventType event;
@@ -194,13 +185,24 @@ struct HistoryEntry {
   std::string description;
 
   HistoryEntry(StateId from, StateId to, EventType evt, bool transitioned,
-               std::string desc = "")
-      : timestamp(std::chrono::steady_clock::now()),
+               const std::string& desc = "")
+      : timestamp(std::chrono::steady_clock::now().time_since_epoch().count()),
         from_state(from),
         to_state(to),
         event(evt),
         transition_occurred(transitioned),
         description(std::move(desc)) {}
+
+  std::string toString() const {
+    std::stringstream ss;
+    ss << timestamp << ","            //
+       << from_state << ","           //
+       << to_state << ","             //
+       << event << ","                //
+       << transition_occurred << ","  //
+       << description;
+    return ss.str();
+  }
 };
 
 // Main FSM class
@@ -223,10 +225,6 @@ class FSM {
   StateId addState(const std::string& name, StateCallback on_enter);
   StateId addState(const std::string& name, StateCallback on_enter,
                    StateCallback on_exit);
-  template <typename T>
-  StateId addState() {
-    return addState(std::move(std::make_unique<State>()));
-  }
 
   // Transition management
   void addTransition(const std::string& from, const std::string& to,
@@ -265,6 +263,7 @@ class FSM {
   void enableThreadSafety(bool enable = true) { thread_safe_ = enable; }
 
  private:
+  StateId generateId() { return ++state_ids_; }
   mutable std::mutex mutex_;
   bool thread_safe_ = false;
 
@@ -274,6 +273,7 @@ class FSM {
   StateId current_state_id_ = 0;
   StateId previous_state_id_ = 0;
   bool is_started_ = false;
+  int state_ids_ = 0;
 
   std::vector<HistoryEntry> history_;
   std::size_t max_history_size_;
