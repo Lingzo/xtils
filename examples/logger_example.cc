@@ -38,7 +38,7 @@ void basic_logging_example() {
 
   // Logging with custom logger instance
   auto* logger = logger::default_logger();
-  L_INFO(logger, "Custom logger instance message");
+  INFO(logger, "Custom logger instance message");
 
   // Formatted logging
   int value = 42;
@@ -57,7 +57,7 @@ void performance_example() {
   auto* logger = logger::default_logger();
 
   // Set to INFO level to avoid debug message overhead
-  logger::set_level(logger, logger::INFO);
+  logger::set_level(logger, logger::info);
 
   // Measure performance of async logging
   auto start = std::chrono::high_resolution_clock::now();
@@ -88,7 +88,7 @@ void level_filtering_example() {
   auto* logger = logger::default_logger();
 
   // Set to WARN level - only WARN and ERROR messages will be shown
-  logger::set_level(logger, logger::WARN);
+  logger::set_level(logger, logger::warn);
   std::cout << "Set log level to WARN" << std::endl;
 
   LogD("This debug message should NOT appear");
@@ -97,8 +97,8 @@ void level_filtering_example() {
   LogE("This error message SHOULD appear");
 
   // Reset to INFO level
-  logger::set_level(logger, logger::INFO);
-  std::cout << "Reset log level to INFO" << std::endl;
+  logger::set_level(logger, logger::info);
+  std::cout << "Reset log level to info" << std::endl;
   std::string max_line(10 * 1024, 'c');
   LogI("max line %s", max_line.c_str());
   LogD("This debug message should NOT appear");

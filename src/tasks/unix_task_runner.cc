@@ -221,7 +221,6 @@ void UnixTaskRunner::AddFileDescriptorWatch(PlatformHandle fd,
 void UnixTaskRunner::RemoveFileDescriptorWatch(PlatformHandle fd) {
   {
     std::lock_guard<std::mutex> lock(lock_);
-    DCHECK(watch_tasks_.count(fd));
     watch_tasks_.erase(fd);
     watch_tasks_changed_ = true;
   }

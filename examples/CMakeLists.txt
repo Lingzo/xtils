@@ -21,7 +21,10 @@ add_example(basic_app basic_app.cc)
 add_example(fsm_example fsm_example.cc)
 add_example(inspect_example inspect_example.cc)
 add_example(logger_example logger_example.cc)
+add_example(tcp_example tcp_example.cc)
 add_example(timer_example timer_example.cc)
+add_example(udp_example udp_example.cc)
+add_example(udp_multicast_example udp_multicast_example.cc)
 
 # Optional: Create a custom target to build all examples
 add_custom_target(examples
@@ -30,6 +33,9 @@ add_custom_target(examples
         fsm_example
         inspect_example
         logger_example
+        tcp_example
+        udp_example
+        udp_multicast_example
 )
 
 # Installation (optional)
@@ -38,6 +44,9 @@ install(TARGETS
     fsm_example
     inspect_example
     logger_example
+    tcp_example
+    udp_example
+    udp_multicast_example
     DESTINATION ${CMAKE_INSTALL_BINDIR}/examples
     OPTIONAL
 )

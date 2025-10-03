@@ -6,6 +6,7 @@
 #include "xtils/utils/base64.h"
 #include "xtils/utils/sha1.h"
 #include "xtils/utils/string_utils.h"
+#include "xtils/utils/string_view.h"
 
 namespace xtils {
 
@@ -192,7 +193,8 @@ size_t HttpServer::ParseOneHttpRequest(HttpServerConnection* conn) {
       auto hdr_name = line.substr(0, col);
       auto hdr_value = line.substr(col + 2);
       if (http_req.num_headers < http_req.headers.size()) {
-        http_req.headers[http_req.num_headers++] = {hdr_name, hdr_value};
+        http_req.headers[http_req.num_headers++] = {hdr_name.ToStr(),
+                                                    hdr_value.ToStr()};
       } else {
         conn->SendResponseAndClose("400 Bad Request", {},
                                    "Too many HTTP headers");
@@ -260,7 +262,7 @@ void HttpServer::HandleCorsPreflightRequest(const HttpRequest& req) {
 bool HttpServer::IsOriginAllowed(StringView origin) {
   for (const std::string& allowed_origin : allowed_origins_) {
     if (allowed_origin == "*") return true;
-    if (origin.CaseInsensitiveEq(StringView(allowed_origin))) {
+    if (origin.CaseInsensitiveEq(allowed_origin.c_str())) {
       return true;
     }
   }
@@ -282,10 +284,10 @@ void HttpServerConnection::UpgradeToWebsocket(const HttpRequest& req) {
   if (origin_allowed_.empty())
     return SendResponseAndClose("403 Forbidden", {}, "Origin not allowed");
 
-  auto ws_ver = req.GetHeader("sec-webSocket-version").value_or(StringView());
-  auto ws_key = req.GetHeader("sec-webSocket-key").value_or(StringView());
+  auto ws_ver = req.GetHeader("sec-webSocket-version").value_or({});
+  auto ws_key = req.GetHeader("sec-webSocket-key").value_or({});
 
-  if (!ws_ver.CaseInsensitiveEq("13"))
+  if (!StringView(ws_ver).CaseInsensitiveEq("13"))
     return SendResponseAndClose("505 HTTP Version Not Supported", {});
 
   if (ws_key.size() != 24) {
@@ -308,15 +310,13 @@ void HttpServerConnection::UpgradeToWebsocket(const HttpRequest& req) {
   auto digest = SHA1Hash(signed_nonce.c_str(), signed_nonce.len());
   std::string digest_b64 = Base64Encode(digest.data(), digest.size());
 
-  std::list<Header> headers = {
-      {"Upgrade", "websocket"},                      //
-      {"Connection", "Upgrade"},                     //
-      {"Sec-WebSocket-Accept", digest_b64.c_str()},  //
+  HttpHeaders headers = {
+      {"Upgrade", "websocket"},              //
+      {"Connection", "Upgrade"},             //
+      {"Sec-WebSocket-Accept", digest_b64},  //
   };
   LogD("[HTTP] Handshaking WebSocket for %.*s",
        static_cast<int>(req.uri.size()), req.uri.data());
-  // for (const char* hdr : headers)
-  //   // DLOG("> %s", hdr);
 
   SendResponseHeaders("101 Switching Protocols", headers,
                       HttpServerConnection::kOmitContentLength);
@@ -439,7 +439,7 @@ size_t HttpServer::ParseOneWebsocketFrame(HttpServerConnection* conn) {
 }
 
 void HttpServerConnection::SendResponseHeaders(const char* http_code,
-                                               const std::list<Header>& headers,
+                                               const HttpHeaders& headers,
                                                size_t content_length) {
   CHECK(!headers_sent_);
   CHECK(!is_websocket_);
@@ -456,11 +456,10 @@ void HttpServerConnection::SendResponseHeaders(const char* http_code,
   append(http_code);
   append("\r\n");
   for (const auto& kv : headers) {
-    StringView hdr = (kv.name);
+    StringView hdr(kv.name);
     if (hdr.empty()) continue;
-    has_connection_header |= hdr.substr(0, 11).CaseInsensitiveEq("connection:");
-    StackString<128> hdr_str("%s: %s", kv.name.ToStr().c_str(),
-                             kv.value.ToStr().c_str());
+    has_connection_header |= hdr.CaseInsensitiveEq("connection");
+    StackString<128> hdr_str("%s: %s", kv.name.c_str(), kv.value.c_str());
     append(hdr_str.c_str());
     append("\r\n");
   }
@@ -505,7 +504,7 @@ void HttpServerConnection::SendResponseBody(const void* data, size_t len) {
 void HttpServerConnection::Close() { sock->Shutdown(/*notify=*/true); }
 
 void HttpServerConnection::SendResponse(const char* http_code,
-                                        const std::list<Header>& headers,
+                                        const HttpHeaders& headers,
                                         StringView content, bool force_close) {
   if (force_close) keepalive_ = false;
   SendResponseHeaders(http_code, headers, content.size());
@@ -554,9 +553,10 @@ HttpServerConnection::HttpServerConnection(std::unique_ptr<UnixSocket> s)
 
 HttpServerConnection::~HttpServerConnection() = default;
 
-std::optional<StringView> HttpRequest::GetHeader(StringView name) const {
+std::optional<std::string> HttpRequest::GetHeader(StringView name) const {
   for (size_t i = 0; i < num_headers; i++) {
-    if (headers[i].name.CaseInsensitiveEq(name)) return headers[i].value;
+    if (StringView(headers[i].name).CaseInsensitiveEq(name))
+      return headers[i].value;
   }
   return std::nullopt;
 }

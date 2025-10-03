@@ -1,11 +1,9 @@
 #include <atomic>
 #include <ctime>
 #include <thread>
-#include <tuple>
 
 #include "xtils/debug/inspect.h"
 #include "xtils/logging/logger.h"
-#include "xtils/tasks/thread_task_runner.h"
 #include "xtils/utils/json.h"
 
 using namespace xtils;
@@ -18,7 +16,6 @@ void HandleHello(const Inspect::Request &req, Inspect::Response &resp) {
   xtils::Json response;
   response["message"] = "Hello, World!";
   response["path"] = req.path;
-  response["method"] = req.method;
 
   // Include query parameters if any
   if (!req.query.empty()) {
@@ -29,14 +26,14 @@ void HandleHello(const Inspect::Request &req, Inspect::Response &resp) {
     response["query"] = query_json;
   }
 
-  resp = Inspect::JsonResponse(response);
+  resp = Inspect::Json(response);
 }
 
 void HandleUserInfo(const Inspect::Request &req, Inspect::Response &resp) {
   // Extract user ID from query parameters
   auto it = req.query.find("id");
   if (it == req.query.end()) {
-    resp = Inspect::ErrorResponse("Missing 'id' parameter", "400 Bad Request");
+    resp = Inspect::Error("Missing 'id' parameter");
     return;
   }
 
@@ -48,7 +45,7 @@ void HandleUserInfo(const Inspect::Request &req, Inspect::Response &resp) {
   user_info["email"] = "user" + user_id + "@example.com";
   user_info["active"] = true;
 
-  resp = Inspect::JsonResponse(user_info);
+  resp = Inspect::Json(user_info);
 }
 
 void HandleStatus(const Inspect::Request &req, Inspect::Response &resp) {
@@ -61,18 +58,17 @@ void HandleStatus(const Inspect::Request &req, Inspect::Response &resp) {
   // Get server info from Inspect
   status["inspect_info"] = Inspect::Get().GetServerInfo();
 
-  resp = Inspect::JsonResponse(status);
+  resp = Inspect::Json(status);
 }
 
 void HandleEcho(const Inspect::Request &req, Inspect::Response &resp) {
-  if (req.method == "POST") {
+  if (!req.body.empty()) {
     xtils::Json echo_response;
     echo_response["echo"] = req.body;
     echo_response["content_length"] = req.body.length();
-    resp = Inspect::JsonResponse(echo_response);
+    resp = Inspect::Json(echo_response);
   } else {
-    resp = Inspect::ErrorResponse("Only POST method supported",
-                                  "405 Method Not Allowed");
+    resp = Inspect::Error("Only POST method supported");
   }
 }
 
@@ -101,17 +97,17 @@ int main() {
                   xtils::Json time_response;
                   time_response["timestamp"] = std::time(nullptr);
                   time_response["iso_time"] = "2024-01-01T00:00:00Z";
-                  resp = Inspect::JsonResponse(time_response);
+                  resp = Inspect::Json(time_response);
                 });
 
   // Counter API for WebSocket demonstration
   INSPECT_ROUTE("/api/counter", "Get or increment global counter",
                 [](const Inspect::Request &req, Inspect::Response &resp) {
-                  if (req.method == "GET") {
+                  if (req.body.empty()) {
                     xtils::Json response;
                     response["counter"] = global_counter.load();
-                    resp = Inspect::JsonResponse(response);
-                  } else if (req.method == "POST") {
+                    resp = Inspect::Json(response);
+                  } else if (!req.body.empty()) {
                     int new_value = ++global_counter;
                     xtils::Json response;
                     response["counter"] = new_value;
@@ -122,21 +118,16 @@ int main() {
                     ws_message["type"] = "counter_update";
                     ws_message["counter"] = new_value;
 
-                    resp = Inspect::JsonResponse(response);
+                    resp = Inspect::Json(response);
                   } else {
-                    resp = Inspect::ErrorResponse("Method not allowed",
-                                                  "405 Method Not Allowed");
+                    resp = Inspect::Error("Method not allowed");
                   }
                 });
 
-  INSPECT_DUAL_ROUTE("/ping", "支持http和ws",
-                     [](const Inspect::Request &req, Inspect::Response &resp) {
-                       if (req.is_websocket) {
-                         resp = Inspect::Response(req.body, req.is_text);
-                       } else {
-                         resp = Inspect::TextResponse("pong");
-                       }
-                     });
+  INSPECT_WEBSOCKET("/ping", "支持http和ws",
+                    [](const Inspect::Request &req, Inspect::Response &resp) {
+                      resp = Inspect::Text("pong");
+                    });
 
   // Add a simple demo page
   std::string demo_html = R"(<!DOCTYPE html>
@@ -189,8 +180,6 @@ int main() {
 </html>)";
 
   INSPECT_STATIC("/demo", demo_html, "text/html");
-  INSPECT_SIMPLE("/api/simple", LogThis());
-  INSPECT_SIMPLE("/api/test", inspect.GetRoutes());
 
   // Enable CORS for API endpoints
   inspect.SetCORS("*");

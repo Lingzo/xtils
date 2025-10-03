@@ -11,37 +11,26 @@
 namespace xtils {
 
 /**
- * Inspect - Simplified HTTP server and WebSocket publisher
+ * Inspect - Simple HTTP/WebSocket server for online debugging
  *
- * Thread-safe singleton for HTTP API inspection and WebSocket publishing.
- * Provides easy-to-use macros and methods for route registration.
+ * Provides easy access to program state and control through web interface.
+ * - HTTP routes for status queries and control commands
+ * - WebSocket for real-time data push and bidirectional communication
  */
 class Inspect {
  public:
-  // Unified request information for both HTTP and WebSocket
+  // Request information (unified for both HTTP and WebSocket)
   struct Request {
     std::string path;
-    std::map<std::string, std::string> query;
-    std::string method;  // "GET", "POST", etc. for HTTP; "WS" for WebSocket
-    std::string body;    // HTTP body or WebSocket data
+    std::map<std::string, std::string> query;  // URL parameters
+    std::string body;                          // HTTP body or WebSocket data
     bool is_websocket = false;
     bool is_text = true;         // For WebSocket messages
-    void *connection = nullptr;  // HttpServerConnection* - opaque pointer
+    void *connection = nullptr;  // Internal connection handle
 
-    // HTTP constructor
-    Request(const std::string &path = "", const std::string &method = "GET",
-            const std::string &body = "")
-        : path(path), method(method), body(body) {}
-
-    // WebSocket constructor
-    Request(const std::string &path, const std::string &data, bool is_text,
-            void *connection)
-        : path(path),
-          method("WS"),
-          body(data),
-          is_websocket(true),
-          is_text(is_text),
-          connection(connection) {}
+    Request() = default;
+    Request(const std::string &path, const std::string &body = "")
+        : path(path), body(body) {}
   };
 
   // Response information
@@ -49,25 +38,15 @@ class Inspect {
     std::string content;
     std::string content_type;
     std::string status;
-    bool is_text = true;
+    bool is_text = true;  // For WebSocket responses
 
     Response(const std::string &content = "",
-             const std::string &content_type = "text/plain",
+             const std::string &content_type = "application/json",
              const std::string &status = "200 OK")
         : content(content), content_type(content_type), status(status) {}
-    Response(const std::string &content, bool is_text)
-        : content(content), is_text(is_text) {}
-    void sendJson(const Json &json) {
-      content = json.dump();
-      content_type = "application/json";
-    }
-    void sendText(const std::string &text) {
-      content = text;
-      content_type = "text/plain";
-    }
   };
 
-  // WebSocket publish result with detailed information
+  // WebSocket publish result
   struct PublishResult {
     size_t sent_count = 0;
     size_t failed_count = 0;
@@ -76,76 +55,116 @@ class Inspect {
 
     bool IsSuccess() const { return sent_count > 0 && failed_count == 0; }
     bool HasFailures() const { return failed_count > 0; }
-    bool IsEmpty() const { return sent_count == 0 && failed_count == 0; }
   };
 
-  // Unified handler type
+  // Handler function type (handles both HTTP and WebSocket)
   using Handler = std::function<void(const Request &, Response &)>;
 
-  // Route information
-  struct RouteInfo {
-    std::string description;
-    Handler handler = nullptr;
-    bool supports_websocket = false;
-
-    RouteInfo() = default;
-    RouteInfo(const std::string &desc, Handler h, bool ws_support = false)
-        : description(desc), handler(h), supports_websocket(ws_support) {}
-  };
-
-  // Factory methods - Thread-safe singleton pattern
+  // Singleton access
   static Inspect &Get();
+
+  /**
+   * @brief Initialize the inspect server
+   * @param ip Server IP address (default: 127.0.0.1)
+   * @param port Server port (default: 8080)
+   */
   void Init(const std::string &ip = "127.0.0.1", int port = 8080);
 
   /**
-   * @brief Stops the Inspect server, freeing resources.
+   * @brief Stop the inspect server
    */
   void Stop();
 
   /**
-   * @brief Checks if the Inspect server is currently running.
-   * @return True if the server is running, false otherwise.
+   * @brief Check if server is running
    */
   bool IsRunning() const;
 
-  // HTTP routing
-  void RouteWithDescription(const std::string &path,
-                            const std::string &description, Handler handler,
-                            bool supports_websocket = false);
-  void Static(const std::string &path, const std::string &content,
-              const std::string &content_type = "text/html");
-  void Unregister(const std::string &path);
-  bool HasRoute(const std::string &path) const;
+  /**
+   * @brief Register a route handler (handles both GET and POST automatically)
+   * @param path URL path
+   * @param handler Request handler function
+   */
+  void Route(const std::string &path, Handler handler);
 
   /**
-   * @brief Checks if a WebSocket handler is registered for the specified path.
-   * @param path The path to check.
-   * @return True if a WebSocket handler is registered, false otherwise.
+   * @brief Register a route with description for documentation
+   * @param path URL path
+   * @param description Description for web UI
+   * @param handler Request handler function
    */
-  bool HasWebSocketRoute(const std::string &path) const;
+  void Route(const std::string &path, const std::string &description,
+             Handler handler);
 
-  // WebSocket publishing (broadcast to all subscribers of a URL)
+  /**
+   * @brief Register a WebSocket route (supports both HTTP and WebSocket)
+   * @param path URL path
+   * @param handler Request handler function
+   */
+  void WebSocket(const std::string &path, Handler handler);
+
+  /**
+   * @brief Register a WebSocket route with description
+   */
+  void WebSocket(const std::string &path, const std::string &description,
+                 Handler handler);
+
+  /**
+   * @brief Register static content
+   */
+  void Static(const std::string &path, const std::string &content,
+              const std::string &content_type = "text/html");
+
+  /**
+   * @brief Remove a route
+   */
+  void Unregister(const std::string &path);
+
+  /**
+   * @brief Check if route exists
+   */
+  bool HasRoute(const std::string &path) const;
+
+  // WebSocket publishing (broadcast to all connected clients)
+
+  /**
+   * @brief Publish message to WebSocket clients
+   * @param url WebSocket URL path
+   * @param message Message content
+   * @param is_text true for text, false for binary
+   * @return Number of clients that received the message
+   */
   size_t Publish(const std::string &url, const std::string &message,
                  bool is_text = true);
+
+  /**
+   * @brief Publish JSON data to WebSocket clients
+   */
   size_t Publish(const std::string &url, const xtils::Json &json);
+
+  /**
+   * @brief Publish with detailed result
+   */
   PublishResult PublishWithResult(const std::string &url,
                                   const std::string &message,
                                   bool is_text = true);
 
+  /**
+   * @brief Check if URL has WebSocket subscribers
+   */
   bool HasSubscribers(const std::string &url) const;
+
+  /**
+   * @brief Get subscriber count for URL
+   */
   size_t GetSubscriberCount(const std::string &url) const;
 
   // Response helpers
-  static Response JsonResponse(const xtils::Json &json,
-                               const std::string &status = "200 OK");
-  static Response TextResponse(const std::string &text,
-                               const std::string &status = "200 OK");
-  static Response HtmlResponse(const std::string &html,
-                               const std::string &status = "200 OK");
-  static Response ErrorResponse(
-      const std::string &message,
-      const std::string &status = "500 Internal Server Error");
-  static Response NotFoundResponse(const std::string &message = "");
+  static Response Json(const xtils::Json &json);
+  static Response Text(const std::string &text);
+  static Response Html(const std::string &html);
+  static Response Error(const std::string &message);
+  static Response Success(const std::string &message = "OK");
 
   // Utilities
   xtils::Json GetServerInfo() const;
@@ -166,50 +185,76 @@ class Inspect {
  public:
   ~Inspect();
 };
+
 }  // namespace xtils
 
 #ifdef INSPECT_DISABLE
-#define INSPECT_ROUTE(path, description, handler)
+#define INSPECT_ROUTE(path, desc, handler)
+#define INSPECT_WEBSOCKET(path, desc, handler)
 #define INSPECT_STATIC(path, content, content_type)
-#define INSPECT_DUAL_ROUTE(path, description, handler)
-#define INSPECT_SIMPLE(path, expr)
-#define INSPECT_PUBLISH_TEXT(url, message)
-#define INSPECT_PUBLISH_BINARY(url, message)
+#define INSPECT_JSON(path, json_expr)
+#define INSPECT_TEXT(path, text_expr)
+#define INSPECT_PUBLISH(url, message)
+#define INSPECT_PUBLISH_BIN(url, bin)
 #else
-// Convenience macros for route registration
 
-// Register route with description - recommended for API documentation
-#define INSPECT_ROUTE(path, description, handler)                           \
-  do {                                                                      \
-    xtils::Inspect::Get().RouteWithDescription(path, description, handler); \
+// Simple route registration macros
+
+/**
+ * Register a route with description
+ */
+#define INSPECT_ROUTE(path, desc, handler)            \
+  do {                                                \
+    xtils::Inspect::Get().Route(path, desc, handler); \
   } while (0)
 
-// Register static content
+/**
+ * Register WebSocket route with description
+ */
+#define INSPECT_WEBSOCKET(path, desc, handler)            \
+  do {                                                    \
+    xtils::Inspect::Get().WebSocket(path, desc, handler); \
+  } while (0)
+
+/**
+ * Register static content
+ */
 #define INSPECT_STATIC(path, content, content_type)            \
   do {                                                         \
     xtils::Inspect::Get().Static(path, content, content_type); \
   } while (0)
 
-// Register combined HTTP and WebSocket handlers for the same path
-#define INSPECT_DUAL_ROUTE(path, description, handler)                     \
-  do {                                                                     \
-    xtils::Inspect::Get().RouteWithDescription(path, description, handler, \
-                                               true);                      \
+/**
+ * Quick JSON response route
+ */
+#define INSPECT_JSON(path, json_expr)                      \
+  do {                                                     \
+    auto handler = [&](const xtils::Inspect::Request &req, \
+                       xtils::Inspect::Response &resp) {   \
+      resp = xtils::Inspect::Json(json_expr);              \
+    };                                                     \
+    xtils::Inspect::Get().Route(path, handler);            \
   } while (0)
 
-#define INSPECT_SIMPLE(path, expr)                                             \
-  do {                                                                         \
-    auto handler = [&](const Inspect::Request &req, Inspect::Response &resp) { \
-      (expr);                                                                  \
-      resp = xtils::Inspect::TextResponse("");                                 \
-    };                                                                         \
-    xtils::Inspect::Get().RouteWithDescription(path, "empty response",         \
-                                               handler);                       \
+/**
+ * Quick text response route
+ */
+#define INSPECT_TEXT(path, text_expr)                      \
+  do {                                                     \
+    auto handler = [&](const xtils::Inspect::Request &req, \
+                       xtils::Inspect::Response &resp) {   \
+      resp = xtils::Inspect::Text(text_expr);              \
+    };                                                     \
+    xtils::Inspect::Get().Route(path, handler);            \
   } while (0)
 
-// WebSocket publishing to all subscribers
-#define INSPECT_PUBLISH_TEXT(url, message) \
+/**
+ * Publish message to WebSocket clients
+ */
+#define INSPECT_PUBLISH(url, message) \
   xtils::Inspect::Get().Publish(url, message, true)
-#define INSPECT_PUBLISH_BINARY(url, message) \
-  xtils::Inspect::Get().Publish(url, message, false)
+
+#define INSPECT_PUBLISH_BIN(url, bin) \
+  xtils::Inspect::Get().Publish(url, bin, false)
+
 #endif

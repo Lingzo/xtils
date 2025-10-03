@@ -10,16 +10,16 @@
 #include <fstream>
 #include <string>
 
-#ifdef TRACE_DISABLED
-#define TRACE_SCOPE(name)
-#define TRACE_INSTANT(name)
-#define TRACE_DATA(p_str)
-#define TRACE_SAVE(filename)
-#else
+#ifdef ENABLE_TRACE_RECORDING
 #define TRACE_SCOPE(name) TraceScopeRAII __trace_scope_raii_##__LINE__(name)
 #define TRACE_INSTANT(name) Tracer::instance().recordInstant(name)
 #define TRACE_DATA(p_str) Tracer::instance().data(p_str)
 #define TRACE_SAVE(filename) Tracer::instance().save(filename)
+#else
+#define TRACE_SCOPE(name)
+#define TRACE_INSTANT(name)
+#define TRACE_DATA(p_str)
+#define TRACE_SAVE(filename)
 #endif
 
 class Tracer {
@@ -106,7 +106,7 @@ class Tracer {
     out->clear();
     out->reserve(count * 512);
     auto append = [&](const std::string &str) { out->append(str); };
-    append("{\"traceEvents\":[\n");
+    append(R"({"traceEvents":[\n)");
     for (size_t i = 0; i < count; ++i) {
       size_t idx = (start + i) % MAX_EVENTS;
       append(events_[idx].toJSON());

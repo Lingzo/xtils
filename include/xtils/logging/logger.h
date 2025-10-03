@@ -39,11 +39,11 @@ struct source_loc {
       : file_name(f), line(l), function_name(func) {}
 };
 
-enum log_level { TRACE = 0, DEBUG = 1, INFO = 2, WARN = 3, ERROR = 4, MAX };
+enum log_level { trace = 0, debug = 1, info = 2, warn = 3, error = 4, max };
 
 constexpr const char* level_name[] = {"T", "D", "I", "W", "E"};
-static_assert(log_level::MAX == sizeof(level_name) / sizeof(level_name[0]),
-              "log_level::MAX need equal sizeof(level_name)");
+static_assert(log_level::max == sizeof(level_name) / sizeof(level_name[0]),
+              "log_level::max need equal sizeof(level_name)");
 
 constexpr const char* to_string(log_level level) { return level_name[level]; }
 
@@ -110,25 +110,25 @@ void _write_log(logger::Logger* log, const char* name,
   _write_log(logger, LOG_TAG_STRING, __SOURCE_LOC__, level, __VA_ARGS__)
 
 // Conditional trace logging for debug builds
-#ifdef DEBUG
-#define L_TRACE(logger, ...) __LOG(logger, logger::TRACE, __VA_ARGS__)
-#define LogT(...) __LOG(logger::default_logger(), logger::TRACE, __VA_ARGS__)
+#ifdef ENABLE_TRACE_LOGGING
+#define TRACE(logger, ...) __LOG(logger, logger::trace, __VA_ARGS__)
+#define LogT(...) __LOG(logger::default_logger(), logger::trace, __VA_ARGS__)
 #else
-#define L_TRACE(logger, ...)
+#define TRACE(logger, ...)
 #define LogT(...)
 #endif
 
 // Standard logging macros
-#define L_DEBUG(logger, ...) __LOG(logger, logger::DEBUG, __VA_ARGS__)
-#define L_INFO(logger, ...) __LOG(logger, logger::INFO, __VA_ARGS__)
-#define L_WARN(logger, ...) __LOG(logger, logger::WARN, __VA_ARGS__)
-#define L_ERROR(logger, ...) __LOG(logger, logger::ERROR, __VA_ARGS__)
+#define DEBUG(logger, ...) __LOG(logger, logger::debug, __VA_ARGS__)
+#define INFO(logger, ...) __LOG(logger, logger::info, __VA_ARGS__)
+#define WARN(logger, ...) __LOG(logger, logger::warn, __VA_ARGS__)
+#define ERROR(logger, ...) __LOG(logger, logger::error, __VA_ARGS__)
 
 // Convenience macros using default logger
-#define LogD(...) __LOG(logger::default_logger(), logger::DEBUG, __VA_ARGS__)
-#define LogI(...) __LOG(logger::default_logger(), logger::INFO, __VA_ARGS__)
-#define LogW(...) __LOG(logger::default_logger(), logger::WARN, __VA_ARGS__)
-#define LogE(...) __LOG(logger::default_logger(), logger::ERROR, __VA_ARGS__)
+#define LogD(...) __LOG(logger::default_logger(), logger::debug, __VA_ARGS__)
+#define LogI(...) __LOG(logger::default_logger(), logger::info, __VA_ARGS__)
+#define LogW(...) __LOG(logger::default_logger(), logger::warn, __VA_ARGS__)
+#define LogE(...) __LOG(logger::default_logger(), logger::error, __VA_ARGS__)
 
 // Special purpose macros
 #define LogTodo() LogW("======>> TODO <<=====")

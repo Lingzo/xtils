@@ -125,7 +125,7 @@ void App::init_log() {
     }
   }
   int log_level = conf().get_int("xtils.log.level");
-  CHECK(log_level < logger::MAX);
+  CHECK(log_level < logger::max);
   logger::set_level(logger::default_logger(), (logger::log_level)log_level);
 }
 
@@ -146,13 +146,13 @@ void App::init_inspect() {
   if (conf().get_bool("xtils.inspect.enable")) {
     INSPECT_ROUTE("/api/config", "config in process",
                   [this](const Inspect::Request& req, Inspect::Response& resp) {
-                    resp.sendJson(config_.to_json());
+                    resp = Inspect::Json(config_.to_json());
                   });
     INSPECT_ROUTE("/api/tracer", "get tracer info",
                   [this](const Inspect::Request& req, Inspect::Response& resp) {
                     std::string tracer;
                     TRACE_DATA(&tracer);
-                    resp.sendText(tracer);
+                    resp = Inspect::Text(tracer);
                   });
     INSPECT_ROUTE("/api/version", "get version info",
                   [this](const Inspect::Request& req, Inspect::Response& resp) {
@@ -166,7 +166,7 @@ void App::init_inspect() {
                     version["minor"] = minor;
                     version["patch"] = patch;
                     version["build_time"] = build_time;
-                    resp.sendJson(version);
+                    resp = Inspect::Json(version);
                   });
   }
 #endif

@@ -37,7 +37,7 @@
 #include "xtils/debug/tracer.h"
 #include "xtils/logging/sink.h"
 
-#define MAX_LINE_LOG_SIZE (1024)
+#define MAX_LINE_LOG_SIZE (1024 * 8)
 #define DATE_BUF_SIZE 26  // yyyy-mm-dd hh:mm:ss.xxxxxx
 
 namespace {
@@ -106,7 +106,7 @@ struct LogEntry {
 class Logger::Impl {
  public:
   explicit Impl()
-      : level_(INFO), shutdown_requested_(false), dropped_messages_(0) {
+      : level_(info), shutdown_requested_(false), dropped_messages_(0) {
     // Start worker thread
     worker_thread_ = std::thread(&Impl::worker_thread, this);
   }
@@ -331,14 +331,14 @@ void _write_log(logger::Logger* log, const char* name,
   if (n > static_cast<int>(kBufSize)) {
     std::strcpy(buf + kBufSize - (kSuffixLen + 1), kSuffix);
     n = kBufSize;
-    level = logger::WARN;
+    level = logger::warn;
   } else if (n < 0) {
     std::strcpy(buf, "[format error]");
     n = kSuffixLen;
-    level = logger::WARN;
+    level = logger::warn;
   }
-  // Use async logging for better performance, except for INFO and above
-  if (level >= logger::INFO) {
+  // Use async logging for better performance, except for info and above
+  if (level > logger::info) {
     log->write_log_sync(name, lc, level, std::string(buf, n));
   } else {
     log->write_log_async(name, lc, level, std::string(buf, n));

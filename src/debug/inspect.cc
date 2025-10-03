@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "xtils/logging/logger.h"
+#include "xtils/net/http_common.h"
 #include "xtils/net/http_server.h"
 #include "xtils/tasks/task_runner.h"
 #include "xtils/tasks/thread_task_runner.h"
@@ -35,6 +36,7 @@ std::string formatSeconds(uint64_t seconds) {
   ss << seconds << "s";
   return ss.str();
 }
+
 std::map<std::string, std::string> getProcessStatusMap() {
   std::map<std::string, std::string> result;
   long clk_tck = sysconf(_SC_CLK_TCK);
@@ -188,7 +190,15 @@ std::string Map2Text(const std::string& title,
   return ss.str();
 }
 }  // namespace
+
 namespace xtils {
+
+// Route information
+struct RouteInfo {
+  std::string description;
+  Inspect::Handler handler;
+  bool supports_websocket = false;
+};
 
 // Private implementation class
 class Impl : public HttpRequestHandler {
@@ -198,22 +208,17 @@ class Impl : public HttpRequestHandler {
   ~Impl() { Stop(); }
 
   void Init(TaskRunner* task_runner, const std::string& ip, int port) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     task_runner_ = task_runner;
     port_ = port;
     ip_ = ip;
+
     if (!started_ && task_runner_) {
       server_ = std::make_unique<HttpServer>(task_runner_, this);
       started_ = server_->Start(ip, port);
 
       // Register default index route
-      RegisterHandler(
-          "/", [this](const Inspect::Request& req, Inspect::Response& resp) {
-            if (req.query.find("json") != req.query.end()) {
-              resp = Inspect::JsonResponse(GetServerInfo());
-            } else {
-              resp = Inspect::HtmlResponse(GenerateIndexPage());
-            }
-          });
+      RegisterDefaultRoutes();
     }
   }
 
@@ -232,19 +237,10 @@ class Impl : public HttpRequestHandler {
     return started_ && server_ != nullptr;
   }
 
-  void RegisterHandler(const std::string& path, Inspect::Handler handler) {
+  void RegisterHandler(const std::string& path, const std::string& description,
+                       Inspect::Handler handler, bool supports_websocket) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    routes_[path].handler = handler;
-  }
-
-  void RegisterHandlerWithDescription(const std::string& path,
-                                      const std::string& description,
-                                      Inspect::Handler handler,
-                                      bool supports_websocket = false) {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    routes_[path].description = description;
-    routes_[path].handler = handler;
-    routes_[path].supports_websocket = supports_websocket;
+    routes_[path] = {description, handler, supports_websocket};
   }
 
   void UnregisterHandler(const std::string& path) {
@@ -254,32 +250,7 @@ class Impl : public HttpRequestHandler {
 
   bool HasHandler(const std::string& path) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    auto it = routes_.find(path);
-    return it != routes_.end() && it->second.handler;
-  }
-
-  std::vector<std::string> GetHandlerPaths() const {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    std::vector<std::string> paths;
-    paths.reserve(routes_.size());
-    for (const auto& pair : routes_) {
-      if (pair.second.handler) {
-        paths.push_back(pair.first);
-      }
-    }
-    std::sort(paths.begin(), paths.end());
-    return paths;
-  }
-
-  std::vector<std::string> GetWebSocketUrls() const {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    std::vector<std::string> urls;
-    urls.reserve(websocket_connections_.size());
-    for (const auto& pair : websocket_connections_) {
-      urls.push_back(pair.first);
-    }
-    std::sort(urls.begin(), urls.end());
-    return urls;
+    return routes_.find(path) != routes_.end();
   }
 
   bool HasWebSocketHandler(const std::string& path) const {
@@ -288,26 +259,26 @@ class Impl : public HttpRequestHandler {
     return it != routes_.end() && it->second.supports_websocket;
   }
 
-  std::vector<std::string> GetWebSocketHandlerPaths() const {
+  std::vector<std::string> GetHandlerPaths() const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::vector<std::string> paths;
+    paths.reserve(routes_.size());
     for (const auto& pair : routes_) {
-      if (pair.second.supports_websocket) {
-        paths.push_back(pair.first);
-      }
+      paths.push_back(pair.first);
     }
     std::sort(paths.begin(), paths.end());
     return paths;
   }
 
   size_t PublishEvent(const std::string& url, const std::string& message,
-                      bool is_text = true) {
+                      bool is_text) {
     return PublishEventWithResult(url, message, is_text).sent_count;
   }
 
   Inspect::PublishResult PublishEventWithResult(const std::string& url,
                                                 const std::string& message,
-                                                bool is_text = true) {
+                                                bool is_text) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     Inspect::PublishResult result;
 
     auto it = websocket_connections_.find(url);
@@ -385,6 +356,7 @@ class Impl : public HttpRequestHandler {
     info["port"] = port_;
     info["ip"] = ip_;
     info["running"] = IsRunning();
+
     xtils::Json::array_t routes_array;
     for (const auto& pair : routes_) {
       xtils::Json route;
@@ -411,6 +383,7 @@ class Impl : public HttpRequestHandler {
       ws_array.push_back(ws);
     }
     info["websockets"] = xtils::Json(ws_array);
+
     {
       xtils::Json proc_info;
       for (const auto& [k, v] : getProcessStatusMap()) {
@@ -425,59 +398,8 @@ class Impl : public HttpRequestHandler {
       }
       info["sys"] = sys_info;
     }
+
     return info;
-  }
-
-  std::string ReplaceTemplateVars(const std::string& content) const {
-    std::string result = content;
-    // Replace {{PORT}} with actual port
-    ReplaceAll(result, "{{PORT}}", std::to_string(port_));
-
-    // Replace {{ROUTES}} with route list
-    {
-      std::string routes_html;
-      for (const auto& pair : routes_) {
-        if (pair.second.handler) {
-          std::string item =
-              R"(<li><a href="{{URL}}">{{URL}}</a> {{DESC}}</li>)";
-          ReplaceAll(item, "{{URL}}", pair.first);
-          if (!pair.second.description.empty()) {
-            ReplaceAll(item, "{{DESC}}", pair.second.description);
-          } else {
-            ReplaceAll(item, "{{DESC}}", "");
-          }
-          routes_html += item;
-        }
-      }
-      ReplaceAll(result, "{{ROUTES}}", routes_html);
-    }
-    ReplaceAll(result, "{{PROC_INFO}}",
-               Map2Text("ProcessInfo", getProcessStatusMap()));
-    ReplaceAll(result, "{{SYS_INFO}}",
-               Map2Text("SysInfo", getSystemStatusMap()));
-    return result;
-  }
-
-  std::string GenerateIndexPage() const {
-    std::string html = R"(<!DOCTYPE html>
-          <html>
-          <head>
-          <title>Inspect Server</title>
-          <meta http-equiv="refresh" content="10">
-          <meta charset="UTF-8">
-          </head>
-          <body>
-          <h1>Inspect Server - Port {{PORT}}</h1>
-          <h2>Available Routes</h2>
-          <ul>{{ROUTES}}</ul>
-          <h2>Server Info</h2>
-          <p>Status: Running</p>
-          <pre>{{PROC_INFO}}</pre>
-          <pre>{{SYS_INFO}}</pre>
-          </body>
-          </html>)";
-
-    return ReplaceTemplateVars(html);
   }
 
   void SetCORS(const std::string& allow_origin) {
@@ -506,44 +428,36 @@ class Impl : public HttpRequestHandler {
 
     // Check if there's a WebSocket handler for this path
     auto route_it = routes_.find(path);
-    if (route_it != routes_.end()) {
-      if (route_it->second.supports_websocket && route_it->second.handler) {
-        // Extract query parameters from the original path
-        std::map<std::string, std::string> query = ParseQueryParams(path);
+    if (route_it != routes_.end() && route_it->second.supports_websocket) {
+      // Create WebSocket request
+      Inspect::Request ws_req;
+      ws_req.path = ExtractPath(path);
+      ws_req.query = ParseQueryParams(path);
+      ws_req.body = msg.data.ToStr();
+      ws_req.is_websocket = true;
+      ws_req.is_text = msg.is_text;
+      ws_req.connection = static_cast<void*>(msg.conn);
 
-        // Create WebSocket request (using unified Request struct)
-        Inspect::Request ws_req;
-        ws_req.path = ExtractPath(path);
-        ws_req.query = query;
-        ws_req.method = "WS";
-        ws_req.body = msg.data.ToStr();
-        ws_req.is_websocket = true;
-        ws_req.is_text = msg.is_text;
-        ws_req.connection = static_cast<void*>(msg.conn);
+      // Call the handler
+      Inspect::Response response;
+      try {
+        route_it->second.handler(ws_req, response);
+      } catch (const std::exception& e) {
+        response =
+            Inspect::Error("WebSocket handler error: " + std::string(e.what()));
+      }
 
-        // Call the handler with response object
-        Inspect::Response response;
-        try {
-          route_it->second.handler(ws_req, response);
-        } catch (const std::exception& e) {
-          response = Inspect::ErrorResponse("WebSocket handler error: " +
-                                            std::string(e.what()));
+      // Send response if handler set data
+      if (!response.content.empty()) {
+        if (response.is_text) {
+          msg.conn->SendWebsocketMessageText(response.content.data(),
+                                             response.content.size());
+        } else {
+          msg.conn->SendWebsocketMessage(response.content.data(),
+                                         response.content.size());
         }
-
-        // Send response if handler set data
-        if (!response.content.empty()) {
-          if (response.is_text) {
-            msg.conn->SendWebsocketMessageText(response.content.data(),
-                                               response.content.size());
-          } else {
-            msg.conn->SendWebsocketMessage(response.content.data(),
-                                           response.content.size());
-          }
-        }
-        return;
       }
     }
-    LogW("can't be here");
   }
 
   void OnHttpConnectionClosed(HttpServerConnection* conn) override {
@@ -551,23 +465,35 @@ class Impl : public HttpRequestHandler {
   }
 
  private:
+  void RegisterDefaultRoutes() {
+    // Register default index route
+    routes_["/"] = {
+        "Inspect Server Index",
+        [this](const Inspect::Request& req, Inspect::Response& resp) {
+          if (req.query.find("json") != req.query.end()) {
+            resp = Inspect::Json(GetServerInfo());
+          } else {
+            resp = Inspect::Html(GenerateIndexPage());
+          }
+        },
+        false};
+  }
+
   std::string ExtractPath(const std::string& uri_str) const {
-    std::string full_path(uri_str.data(), uri_str.size());
-    size_t query_pos = full_path.find('?');
-    return (query_pos != std::string::npos) ? full_path.substr(0, query_pos)
-                                            : full_path;
+    size_t query_pos = uri_str.find('?');
+    return (query_pos != std::string::npos) ? uri_str.substr(0, query_pos)
+                                            : uri_str;
   }
 
   std::map<std::string, std::string> ParseQueryParams(
       const std::string& uri_str) const {
     std::map<std::string, std::string> params;
-    std::string full_path(uri_str.data(), uri_str.size());
-    size_t query_pos = full_path.find('?');
+    size_t query_pos = uri_str.find('?');
     if (query_pos == std::string::npos) {
       return params;
     }
 
-    std::string query = full_path.substr(query_pos + 1);
+    std::string query = uri_str.substr(query_pos + 1);
     std::istringstream ss(query);
     std::string pair;
 
@@ -583,14 +509,22 @@ class Impl : public HttpRequestHandler {
     return params;
   }
 
-  bool IsWebSocketUpgradeRequest(const HttpRequest& req) const {
-    return req.is_websocket_handshake;
-  }
-
   void HandleWebSocketUpgrade(const HttpRequest& req) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-
     std::string path = ExtractPath(req.uri.ToStr());
+
+    // Check if WebSocket is supported for this path
+    if (!HasWebSocketHandler(path)) {
+      // WebSocket not supported
+      HttpHeaders headers{{"Content-Type", "application/json"}};
+      xtils::Json error;
+      error["error"] = "WebSocket not supported for this path";
+      std::string json_body = error.dump();
+      req.conn->SendResponseAndClose("400 Bad Request", headers,
+                                     StringView(json_body));
+      return;
+    }
+
     websocket_connections_[path].push_back(req.conn);
     connection_to_url_[req.conn] = path;
     req.conn->UpgradeToWebsocket(req);
@@ -601,16 +535,17 @@ class Impl : public HttpRequestHandler {
     std::string path = ExtractPath(uri_str);
     auto query_params = ParseQueryParams(uri_str);
 
+    // Handle WebSocket upgrade requests
+    if (http_req.is_websocket_handshake) {
+      HandleWebSocketUpgrade(http_req);
+      return;
+    }
+
     // Create Inspect::Request
     Inspect::Request req;
     req.path = path;
     req.query = std::move(query_params);
-    req.method = http_req.method.ToStr();
-
-    // Convert body if present
-    if (!http_req.body.empty()) {
-      req.body = http_req.body.ToStr();
-    }
+    req.body = http_req.body.ToStr();
 
     // Find handler
     Inspect::Response response;
@@ -618,36 +553,25 @@ class Impl : public HttpRequestHandler {
       std::lock_guard<std::recursive_mutex> lock(mutex_);
       auto route_it = routes_.find(path);
       if (route_it != routes_.end()) {
-        if (!http_req.is_websocket_handshake) {
-          try {
-            route_it->second.handler(req, response);
-          } catch (const std::exception& e) {
-            response = Inspect::ErrorResponse("Handler error: " +
-                                              std::string(e.what()));
-          }
-        } else {
-          if (route_it->second.supports_websocket) {
-            HandleWebSocketUpgrade(http_req);
-            return;
-          } else {
-            response = Inspect::NotFoundResponse("WebSocket not supported");
-          }
+        try {
+          route_it->second.handler(req, response);
+        } catch (const std::exception& e) {
+          response = Inspect::Error("Handler error: " + std::string(e.what()));
         }
       } else {
-        response = Inspect::NotFoundResponse("Route not found: " + path);
+        response = Inspect::Error("Route not found: " + path);
+        response.status = "404 Not Found";
       }
     }
 
     // Send response
-    std::list<Header> headers;
-    headers.push_back({"Content-Type", StringView(response.content_type)});
+    HttpHeaders headers;
+    headers.push_back({"Content-Type", response.content_type});
     if (!cors_origin_.empty()) {
+      headers.push_back({"Access-Control-Allow-Origin", cors_origin_});
+      headers.push_back({"Access-Control-Allow-Methods", "GET, POST, OPTIONS"});
       headers.push_back(
-          {"Access-Control-Allow-Origin", StringView(cors_origin_)});
-      headers.push_back({StringView("Access-Control-Allow-Methods"),
-                         StringView("GET, POST, OPTIONS")});
-      headers.push_back({StringView("Access-Control-Allow-Headers"),
-                         StringView("Content-Type, Authorization")});
+          {"Access-Control-Allow-Headers", "Content-Type, Authorization"});
     }
     http_req.conn->SendResponse(response.status.c_str(), headers,
                                 StringView(response.content));
@@ -675,21 +599,71 @@ class Impl : public HttpRequestHandler {
     }
   }
 
+  std::string GenerateIndexPage() const {
+    std::string html = R"(<!DOCTYPE html>
+          <html>
+          <head>
+          <title>Inspect Server</title>
+          <meta http-equiv="refresh" content="10">
+          <meta charset="UTF-8">
+          </head>
+          <body>
+          <h1>Inspect Server - Port {{PORT}}</h1>
+          <h2>Available Routes</h2>
+          <ul>{{ROUTES}}</ul>
+          <h2>Server Info</h2>
+          <p>Status: Running</p>
+          <pre>{{PROC_INFO}}</pre>
+          <pre>{{SYS_INFO}}</pre>
+          </body>
+          </html>)";
+
+    return ReplaceTemplateVars(html);
+  }
+
+  std::string ReplaceTemplateVars(const std::string& content) const {
+    std::string result = content;
+    // Replace {{PORT}} with actual port
+    ReplaceAll(result, "{{PORT}}", std::to_string(port_));
+
+    // Replace {{ROUTES}} with route list
+    {
+      std::string routes_html;
+      for (const auto& pair : routes_) {
+        std::string item = R"(<li><a href="{{URL}}">{{URL}}</a> {{DESC}}</li>)";
+        ReplaceAll(item, "{{URL}}", pair.first);
+        if (!pair.second.description.empty()) {
+          ReplaceAll(item, "{{DESC}}", pair.second.description);
+        } else {
+          ReplaceAll(item, "{{DESC}}", "");
+        }
+        routes_html += item;
+      }
+      ReplaceAll(result, "{{ROUTES}}", routes_html);
+    }
+    ReplaceAll(result, "{{PROC_INFO}}",
+               Map2Text("ProcessInfo", getProcessStatusMap()));
+    ReplaceAll(result, "{{SYS_INFO}}",
+               Map2Text("SysInfo", getSystemStatusMap()));
+    return result;
+  }
+
   mutable std::recursive_mutex mutex_;
   std::unique_ptr<HttpServer> server_;
-  TaskRunner* task_runner_;
-  int port_;
+  TaskRunner* task_runner_ = nullptr;
+  int port_ = 0;
   std::string ip_;
-  bool started_;
+  bool started_ = false;
   std::string cors_origin_;
 
-  std::map<std::string, Inspect::RouteInfo> routes_;
+  std::map<std::string, RouteInfo> routes_;
   std::map<std::string, std::vector<HttpServerConnection*>>
       websocket_connections_;
   std::map<HttpServerConnection*, std::string> connection_to_url_;
 };
 
 static Impl* impl_ = nullptr;
+
 // Inspect class implementation
 Inspect::Inspect() : task_runner_(ThreadTaskRunner::CreateAndStart("inspect")) {
   impl_ = new Impl();
@@ -715,21 +689,37 @@ bool Inspect::IsRunning() const {
   return impl_->IsRunning();
 }
 
-void Inspect::RouteWithDescription(const std::string& path,
-                                   const std::string& description,
-                                   Handler handler, bool supports_websocket) {
+void Inspect::Route(const std::string& path, Handler handler) {
   CHECK(impl_ != nullptr);
-  impl_->RegisterHandlerWithDescription(path, description, std::move(handler),
-                                        supports_websocket);
+  impl_->RegisterHandler(path, "", handler, false);
+}
+
+void Inspect::Route(const std::string& path, const std::string& description,
+                    Handler handler) {
+  CHECK(impl_ != nullptr);
+  impl_->RegisterHandler(path, description, handler, false);
+}
+
+void Inspect::WebSocket(const std::string& path, Handler handler) {
+  CHECK(impl_ != nullptr);
+  impl_->RegisterHandler(path, "", handler, true);
+}
+
+void Inspect::WebSocket(const std::string& path, const std::string& description,
+                        Handler handler) {
+  CHECK(impl_ != nullptr);
+  impl_->RegisterHandler(path, description, handler, true);
 }
 
 void Inspect::Static(const std::string& path, const std::string& content,
                      const std::string& content_type) {
   CHECK(impl_ != nullptr);
   impl_->RegisterHandler(
-      path, [content, content_type](const Request&, Response& resp) {
+      path, "Static content",
+      [content, content_type](const Request&, Response& resp) {
         resp = Response(content, content_type);
-      });
+      },
+      false);
 }
 
 void Inspect::Unregister(const std::string& path) {
@@ -770,35 +760,30 @@ size_t Inspect::GetSubscriberCount(const std::string& url) const {
   return impl_->GetEventSubscriberCount(url);
 }
 
-Inspect::Response Inspect::JsonResponse(const xtils::Json& json,
-                                        const std::string& status) {
-  return Response(json.dump(), "application/json", status);
+Inspect::Response Inspect::Json(const xtils::Json& json) {
+  return Response(json.dump(), "application/json", "200 OK");
 }
 
-Inspect::Response Inspect::TextResponse(const std::string& text,
-                                        const std::string& status) {
-  return Response(text, "text/plain", status);
+Inspect::Response Inspect::Text(const std::string& text) {
+  return Response(text, "text/plain", "200 OK");
 }
 
-Inspect::Response Inspect::HtmlResponse(const std::string& html,
-                                        const std::string& status) {
-  return Response(html, "text/html", status);
+Inspect::Response Inspect::Html(const std::string& html) {
+  return Response(html, "text/html", "200 OK");
 }
 
-Inspect::Response Inspect::ErrorResponse(const std::string& message,
-                                         const std::string& status) {
+Inspect::Response Inspect::Error(const std::string& message) {
   xtils::Json error;
   error["error"] = message;
-  error["status"] = status;
-  return Response(error.dump(), "application/json", status);
+  return Response(error.dump(), "application/json",
+                  "500 Internal Server Error");
 }
 
-Inspect::Response Inspect::NotFoundResponse(const std::string& message) {
-  std::string msg = message.empty() ? "Not Found" : message;
-  xtils::Json error;
-  error["error"] = msg;
-  error["status"] = "404 Not Found";
-  return Response(error.dump(), "application/json", "404 Not Found");
+Inspect::Response Inspect::Success(const std::string& message) {
+  xtils::Json json;
+  json["success"] = true;
+  json["message"] = message;
+  return Response(json.dump(), "application/json", "200 OK");
 }
 
 xtils::Json Inspect::GetServerInfo() const { return impl_->GetServerInfo(); }
@@ -811,16 +796,6 @@ void Inspect::SetCORS(const std::string& allow_origin) {
 std::vector<std::string> Inspect::GetRoutes() const {
   CHECK(impl_ != nullptr);
   return impl_->GetHandlerPaths();
-}
-
-bool Inspect::HasWebSocketRoute(const std::string& path) const {
-  CHECK(impl_ != nullptr);
-  return impl_->HasWebSocketHandler(path);
-}
-
-std::vector<std::string> Inspect::GetWebSocketRoutes() const {
-  CHECK(impl_ != nullptr);
-  return impl_->GetWebSocketHandlerPaths();
 }
 
 }  // namespace xtils

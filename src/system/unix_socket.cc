@@ -120,7 +120,12 @@ SockaddrAny MakeSockAddr(SockFamily family, const std::string& socket_name) {
       struct addrinfo* addr_info = nullptr;
       struct addrinfo hints{};
       hints.ai_family = AF_INET;
-      getaddrinfo(parts[0].c_str(), parts[1].c_str(), &hints, &addr_info);
+      int ret =
+          getaddrinfo(parts[0].c_str(), parts[1].c_str(), &hints, &addr_info);
+      if (ret < 0 || addr_info == nullptr) {
+        freeaddrinfo(addr_info);
+        return SockaddrAny();
+      }
       SockaddrAny res(addr_info->ai_addr,
                       static_cast<socklen_t>(addr_info->ai_addrlen));
       freeaddrinfo(addr_info);
@@ -136,7 +141,12 @@ SockaddrAny MakeSockAddr(SockFamily family, const std::string& socket_name) {
       struct addrinfo* addr_info = nullptr;
       struct addrinfo hints{};
       hints.ai_family = AF_INET6;
-      getaddrinfo(address[0].c_str(), port[0].c_str(), &hints, &addr_info);
+      int ret =
+          getaddrinfo(address[0].c_str(), port[0].c_str(), &hints, &addr_info);
+      if (ret < 0 || addr_info == nullptr) {
+        freeaddrinfo(addr_info);
+        return SockaddrAny();
+      }
       SockaddrAny res(addr_info->ai_addr,
                       static_cast<socklen_t>(addr_info->ai_addrlen));
       freeaddrinfo(addr_info);
@@ -478,7 +488,11 @@ bool UnixSocketRaw::SetRxTimeout(uint32_t timeout_ms) {
 std::string UnixSocketRaw::GetSockAddr() const {
   struct sockaddr_storage stg{};
   socklen_t slen = sizeof(stg);
-  getsockname(*fd_, reinterpret_cast<struct sockaddr*>(&stg), &slen);
+  int ret = getsockname(*fd_, reinterpret_cast<struct sockaddr*>(&stg), &slen);
+  if (ret < 0) {
+    LogT("Failed to get socket address");
+    return {};
+  }
   char addr[255]{};
 
   if (stg.ss_family == AF_UNIX) {
@@ -506,7 +520,7 @@ std::string UnixSocketRaw::GetSockAddr() const {
     return addr_and_port.ToStr();
   }
 
-  FATAL("GetSockAddr() unsupported on family %d", stg.ss_family);
+  LogT("GetSockAddr() unsupported on family %d", stg.ss_family);
   return {};
 }
 
@@ -741,12 +755,12 @@ void UnixSocket::Shutdown(bool notify) {
   if (notify) {
     if (state_ == State::kConnected) {
       task_runner_->PostTask([weak_ptr] {
-        auto* socket = weak_ptr.get();
+        auto socket = weak_ptr.get();
         if (socket) socket->event_listener_->OnDisconnect(socket);
       });
     } else if (state_ == State::kConnecting) {
       task_runner_->PostTask([weak_ptr] {
-        auto* socket = weak_ptr.get();
+        auto socket = weak_ptr.get();
         if (socket) socket->event_listener_->OnConnect(socket, false);
       });
     }

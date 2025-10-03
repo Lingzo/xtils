@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 
+#include "xtils/net/http_common.h"
 #include "xtils/system/paged_memory.h"
 #include "xtils/system/unix_socket.h"
 #include "xtils/tasks/task_runner.h"
@@ -16,20 +17,12 @@
 namespace xtils {
 class HttpServerConnection;
 
-// Represents an HTTP header.
-struct Header {
-  // The name of the header (e.g., "Content-Type").
-  StringView name;
-  // The value of the header (e.g., "text/html").
-  StringView value;
-};
-
 // Represents an HTTP request.
 struct HttpRequest {
   explicit HttpRequest(HttpServerConnection* c) : conn(c) {}
 
   // Gets the value of a header with the given name, if it exists.
-  std::optional<StringView> GetHeader(StringView name) const;
+  std::optional<std::string> GetHeader(StringView name) const;
 
   // A pointer to the HttpServerConnection that this request belongs to.
   HttpServerConnection* conn;
@@ -44,10 +37,10 @@ struct HttpRequest {
   StringView origin;
   // The body of the request.
   StringView body;
-  std::list<Header> params;
+  HttpHeaders params;
 
   static constexpr uint32_t kMaxHeaders = 32;
-  std::array<Header, kMaxHeaders> headers{};
+  std::array<HttpHeader, kMaxHeaders> headers{};
   bool is_websocket_handshake = false;
 
  private:
@@ -86,16 +79,15 @@ class HttpServerConnection {
   void Close();
 
   // All the above in one shot.
-  void SendResponse(const char* http_code,
-                    const std::list<Header>& headers = {},
+  void SendResponse(const char* http_code, const HttpHeaders& headers = {},
                     StringView content = {}, bool force_close = false);
   void SendResponseAndClose(const char* http_code,
-                            const std::list<Header>& headers = {},
+                            const HttpHeaders& headers = {},
                             StringView content = {}) {
     SendResponse(http_code, headers, content, true);
   }
 
-  // The metods below are only valid for websocket connections.
+  // The methods below are only valid for websocket connections.
 
   // Upgrade an existing connection to a websocket. This can be called only in
   // the context of OnHttpRequest(req) if req.is_websocket_handshake == true.
@@ -115,7 +107,7 @@ class HttpServerConnection {
 
  private:
   void SendResponseHeaders(const char* http_code,
-                           const std::list<Header>& headers = {},
+                           const HttpHeaders& headers = {},
                            size_t content_length = 0);
 
   // Works also for websockets.

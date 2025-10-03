@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <list>
 #include <memory>
 #include <thread>
@@ -62,7 +63,7 @@ class SimpleService : public xtils::Service {
         [](const xtils::Inspect::Request& req, xtils::Inspect::Response& resp) {
           std::string tracer;
           TRACE_DATA(&tracer);
-          resp.sendText(tracer);
+          resp = xtils::Inspect::Text(tracer);
         });
   }
 
