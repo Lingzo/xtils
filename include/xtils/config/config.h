@@ -50,7 +50,8 @@ class Config {
   // Loading methods
   // parse_args supports --config-file parameter to load configuration file
   // first, then command line arguments can override file settings
-  bool parse_args(int argc, char* argv[]);
+  bool parse_args(int argc, const char** argv);
+  bool parse_args(const std::vector<std::string>& args);
   bool load_file(const std::string& filename);
   bool parse_json(const Json& json);
   bool parse(const std::string& json_content);
@@ -78,6 +79,7 @@ class Config {
   bool validate() const;
   std::string help() const;
   std::vector<std::string> missing_required() const;
+  std::vector<std::string> no_parsed() const;
 
   // Serialization
   std::string to_string() const;
@@ -96,6 +98,7 @@ class Config {
   void apply_defaults();
   std::vector<std::string> split_path(const std::string& path) const;
   Json merge_objects(const Json& xtils, const Json& overlay) const;
+  std::vector<std::string> no_parsed_;
 };
 
 // Template implementation

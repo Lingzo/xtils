@@ -1,20 +1,14 @@
-#include <memory>
+#include <vector>
 
 #include "xtils/app/app.h"
 #include "xtils/config/config.h"
 
-// must before run_srv
-void setup_srv(const std::list<std::shared_ptr<xtils::Service>>& ss);
-void setup_srv(const std::shared_ptr<xtils::Service>& ss);
-// make sure have main function
-void run_srv(int argc, char** argv);
-
-void app_version(uint32_t& major, uint32_t& minor, uint32_t& patch,
-                 std::string& build_time);
+void app_version(uint32_t& major, uint32_t& minor, uint32_t& patch);
 // call by internal main function
-void app_main(int argc, char** argv);
+void app_main(xtils::App& ctx, const std::vector<std::string>& args);
 
 namespace xtils {
+
 class Service {
  public:
   explicit Service(const char* n) : name(n) {}
@@ -27,4 +21,9 @@ class Service {
   std::string name;
   Config config;
 };
+
+bool isOk();
+void init(const std::vector<std::string>& args);
+void shutdown();
+void run_forever();
 }  // namespace xtils

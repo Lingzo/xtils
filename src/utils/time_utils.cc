@@ -4,7 +4,6 @@
 #include <limits>
 
 namespace xtils {
-namespace time {
 
 // Steady clock utilities implementation
 namespace steady {
@@ -118,5 +117,4 @@ uint32_t ClampDelayMs(int64_t delay_ms) {
 
 }  // namespace common
 
-}  // namespace time_utils
 }  // namespace xtils

@@ -1,23 +1,27 @@
 #include "xtils/app/service.h"
 
+#include <vector>
+
 #include "xtils/app/app.h"
+#include "xtils/system/signal_handler.h"
 
 __attribute__((weak)) void app_version(uint32_t& major, uint32_t& minor,
-                                       uint32_t& patch,
-                                       std::string& build_time) {
+                                       uint32_t& patch) {
   major = 1;
   minor = 1;
   patch = 0;
-  build_time = __DATE__ " " __TIME__;
 }
 
-__attribute__((weak)) void app_main(int argc, char** argv) {}
+__attribute__((weak)) void app_main(xtils::App& ctx,
+                                    const std::vector<std::string>& argv) {}
 
-void setup_srv(const std::list<std::shared_ptr<xtils::Service>>& ss) {
-  xtils::App::ins()->registor(ss);
-}
-void setup_srv(const std::shared_ptr<xtils::Service>& s) {
-  xtils::App::ins()->registor(s);
-}
+namespace xtils {
+void init(const std::vector<std::string>& args) { App::ins()->init(args); }
 
-void run_srv(int argc, char** argv) { xtils::App::ins()->run(argc, argv); }
+void run_forever() { App::ins()->run(); }
+
+bool isOk() { return !system::SignalHandler::IsShutdownRequested(); }
+
+void shutdown() { system::SignalHandler::Shutdown(); }
+
+}  // namespace xtils

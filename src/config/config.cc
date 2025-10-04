@@ -27,17 +27,23 @@ Config& Config::define(const std::string& name, const std::string& description,
   return *this;
 }
 
-bool Config::parse_args(int argc, char* argv[]) {
+bool Config::parse_args(int argc, const char** argv) {
+  return parse_args(std::vector<std::string>(argv, argv + argc));
+}
+
+bool Config::parse_args(const std::vector<std::string>& args) {
   // First, apply default values
   apply_defaults();
+  no_parsed_.clear();
+  no_parsed_.push_back(args[0]);
 
   // First pass: look for --config-file parameter
   std::string config_file;
-  for (int i = 1; i < argc; ++i) {  // suport mutil config file
-    std::string arg = argv[i];
+  for (int i = 1; i < args.size(); ++i) {  // suport mutil config file
+    std::string arg = args[i];
 
-    if (arg == "--config-file" && i + 1 < argc) {
-      config_file = argv[i + 1];
+    if (arg == "--config-file" && i + 1 < args.size()) {
+      config_file = args[i + 1];
     } else if (starts_with(arg, "--config-file=")) {
       config_file = arg.substr(14);  // length of "--config-file="
     }
@@ -52,8 +58,8 @@ bool Config::parse_args(int argc, char* argv[]) {
   }
 
   // Second pass: process all command line arguments
-  for (int i = 1; i < argc; ++i) {
-    std::string arg = argv[i];
+  for (int i = 1; i < args.size(); ++i) {
+    std::string arg = args[i];
 
     // Skip help flags
     if (arg == "-h" || arg == "--help") {
@@ -90,22 +96,24 @@ bool Config::parse_args(int argc, char* argv[]) {
       } else {
         key = long_arg;
         // Check if next argument is the value
-        if (i + 1 < argc && !starts_with(std::string(argv[i + 1]), "-")) {
-          value_str = argv[++i];
+        if (i + 1 < args.size() && !starts_with(args[i + 1], "-")) {
+          value_str = args[++i];
           has_value = true;
         }
       }
     }
 
     if (key.empty()) {
-      LogE("Unknown argument: %s", arg.c_str());
-      return false;
+      no_parsed_.push_back(key);
+      if (has_value) no_parsed_.push_back(value_str);
+      continue;
     }
 
     auto option_it = options_.find(key);
     if (option_it == options_.end()) {
-      LogE("Unknown option: %s", key.c_str());
-      return false;
+      no_parsed_.push_back(key);
+      if (has_value) no_parsed_.push_back(value_str);
+      continue;
     }
 
     // For boolean options, if no value is provided, treat as true
@@ -270,9 +278,7 @@ std::vector<std::string> Config::missing_required() const {
   return missing;
 }
 
-void Config::print() const {
-  std::cout << data_.dump(2) << std::endl;
-}
+void Config::print() const { std::cout << data_.dump(2) << std::endl; }
 
 Json Config::to_json() const { return data_; }
 

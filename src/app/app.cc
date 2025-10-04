@@ -11,6 +11,7 @@
 #include <string>
 #include <thread>
 
+#include "build_info.h"  // auto generated
 #include "xtils/app/service.h"
 #include "xtils/debug/inspect.h"
 #include "xtils/debug/tracer.h"
@@ -22,6 +23,8 @@
 #include "xtils/tasks/timer.h"
 #include "xtils/utils/file_utils.h"
 #include "xtils/utils/json.h"
+#include "xtils/utils/string_utils.h"
+#include "xtils/utils/time_utils.h"
 
 namespace xtils {
 
@@ -48,23 +51,8 @@ void App::default_config() {
               "log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error", 1)
       .define("xtils.log.console.enable", "log to console or not", true);
 }
-
-void App::init(int argc, char* argv[]) {
-  TRACE_SCOPE("App:init");
-  // Setup signal handlers for graceful shutdown
-  system::SignalHandler::Initialize();
-
-  // all config
-  for (const auto& s : service_) {
-    for (const auto& e : s->config.options()) {
-      const auto& opt = e.second;
-      config_.define(s->name + "." + opt.name, opt.description,
-                     opt.default_value, opt.required);
-    }
-  }
-
-  // Parse command line arguments and load configuration
-  if (!config_.parse_args(argc, argv)) {
+void App::parse_args(const std::vector<std::string>& args) {
+  if (!config_.parse_args(args)) {
     std::cerr << "Failed to parse command line arguments" << std::endl;
     std::cerr << config_.help() << std::endl;
     exit(1);
@@ -80,10 +68,17 @@ void App::init(int argc, char* argv[]) {
     std::cerr << config_.help() << std::endl;
     exit(1);
   }
+}
+void App::init(const std::vector<std::string>& args) {
+  TRACE_SCOPE("App:init");
+  // Setup signal handlers for graceful shutdown
+  system::SignalHandler::Initialize();
+
+  args_ = args;  // cache command line arguments
+  // Parse command line arguments and load configuration
+  parse_args(args);
 
   init_log();
-  print_banner();
-  init_inspect();
 
   // init thread pool
   int threads_size = conf().get_int("xtils.threads");
@@ -91,13 +86,6 @@ void App::init(int argc, char* argv[]) {
   tg_ = std::make_unique<TaskGroup>(threads_size);
   em_ = std::make_unique<EventManager>(tg_.get());
   timer_ = std::make_unique<SteadyTimer>(tg_.get());
-  // sub config
-  for (auto& s : service_) {
-    auto sub = config_.get(s->name);
-    if (sub) {
-      s->config.parse_json(*sub);
-    }
-  }
   initialized_ = true;
 }
 
@@ -156,55 +144,75 @@ void App::init_inspect() {
                   });
     INSPECT_ROUTE("/api/version", "get version info",
                   [this](const Inspect::Request& req, Inspect::Response& resp) {
-                    uint32_t major;
-                    uint32_t minor;
-                    uint32_t patch;
-                    std::string build_time;
-                    app_version(major, minor, patch, build_time);
                     Json version;
-                    version["major"] = major;
-                    version["minor"] = minor;
-                    version["patch"] = patch;
-                    version["build_time"] = build_time;
+                    version["major"] = major_;
+                    version["minor"] = minor_;
+                    version["patch"] = patch_;
+                    version["build_time"] = build_time_;
                     resp = Inspect::Json(version);
                   });
   }
 #endif
 }
+
+void App::pre_run() {
+  // all config
+  for (const auto& s : service_) {
+    for (const auto& e : s->config.options()) {
+      const auto& opt = e.second;
+      config_.define(s->name + "." + opt.name, opt.description,
+                     opt.default_value, opt.required);
+    }
+  }
+
+  parse_args(args_);  // again with sub services
+
+  // sub config
+  for (auto& s : service_) {
+    auto sub = config_.get(s->name);
+    if (sub) {
+      s->config.parse_json(*sub);
+    }
+  }
+
+  print_banner();
+  init_inspect();
+
+  for (auto& p : service_) {
+    p->ctx = this;
+    p->init();
+    LogI("Init %s service successed!!", p->name.c_str());
+  }
+}
+
 void App::run() {
   CHECK(initialized_);
   if (running_) {
     LogW("App is already running");
     return;
   }
-  for (auto& p : service_) {
-    p->ctx = this;
-    p->init();
-    LogI("Init %s service successed!!", p->name.c_str());
-  }
   running_ = true;
+  // process service
+  pre_run();
   LogI("App starting main run loop...");
-  auto now = []() {
-    return std::chrono::steady_clock::now().time_since_epoch().count();
-  };
-  int64_t t1 = now();
-  while (!system::SignalHandler::IsShutdownRequested()) {
+  auto t1 = steady::GetCurrentMs();
+  while (isOk()) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    double diff = (now() - t1) / 1e6;
-    if (diff > 5000) {
-      LogW("main threads blocked, %fms!!!", diff);
-    } else if (diff > 2000) {
-      PostTask([&t1, now]() { t1 = now(); });
+    auto diff_ms = steady::GetCurrentMs() - t1;
+    if (diff_ms > 5000) {
+      LogW("main threads blocked, %fms!!!", diff_ms);
+    } else if (diff_ms > 2000) {
+      PostTask([&t1]() { t1 = steady::GetCurrentMs(); });
     }
     if (tg_->is_busy()) {
       LogW("task group is busy, maybe use more threads, cur is: %d!!!",
            tg_->size());
     }
   }
-  running_ = false;
   LogI("App shutting down...");
   deinit();
   LogI("Exit main");
+  running_ = false;
 }
 
 void App::deinit() {
@@ -221,9 +229,6 @@ void App::deinit() {
   em_.reset();
   timer_.reset();
   tg_.reset();  // must be last
-
-  // Cleanup signal handlers
-  system::SignalHandler::Cleanup();
 }
 
 void App::PostTask(Task task) { tg_->PostTask(task); }
@@ -256,11 +261,8 @@ void App::delay(uint32_t ms, TimerCallback cb) {
 }
 
 void App::print_banner() {
-  uint32_t major;
-  uint32_t minor;
-  uint32_t patch;
-  std::string build_time;
-  app_version(major, minor, patch, build_time);
+  build_time_ = BUILD_TIME;
+  app_version(major_, minor_, patch_);
   const std::string fmt = R"(
 ================ XTILS =================
   Version : v%d.%d.%d
@@ -268,32 +270,26 @@ void App::print_banner() {
   Service : %s
 ========================================
 )";
-  char banner[1024] = {0};
   std::stringstream ss;
   for (auto& s : service_) {
     ss << s->name << " ";
   }
   std::string names = ss.str();
-  snprintf(banner, sizeof(banner), fmt.c_str(), major, minor, patch,
-           build_time.c_str(), names.empty() ? "None" : names.c_str());
-  logger::default_logger()->write_raw(banner);
+  StackString<1024> banner(fmt.c_str(), major_, minor_, patch_,
+                           build_time_.c_str(),
+                           names.empty() ? "None" : names.c_str());
+  logger::default_logger()->write_raw(banner.c_str());
 }
 
 void App::registor(std::list<std::shared_ptr<Service>> services) {
-  CHECK(!initialized_ && !running_);
+  CHECK(!running_);
   for (auto& p : services) {
     registor(p);
   }
 }
 
 void App::registor(std::shared_ptr<Service> p) {
-  CHECK(!initialized_ && !running_);
+  CHECK(!running_);
   service_.push_back(p);
 }
-
-void App::run(int argc, char* argv[]) {
-  init(argc, argv);
-  run();
-}
-
 }  // namespace xtils

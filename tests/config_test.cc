@@ -289,7 +289,7 @@ void test_command_line_parsing() {
                         "0.0.0.0", "--debug", "true"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
-  assert(config.parse_args(argc, const_cast<char**>(argv)));
+  assert(config.parse_args(argc, argv));
 
   // Verify parsed values
   assert(config.get_int("port") == 9090);
@@ -395,7 +395,7 @@ void test_config_file_with_cli_override() {
   };
   int argc = sizeof(argv) / sizeof(argv[0]);
 
-  assert(config.parse_args(argc, const_cast<char**>(argv)));
+  assert(config.parse_args(argc, argv));
 
   // CLI should override file values
   assert(config.get_int("server.port") == 9090);            // overridden

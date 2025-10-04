@@ -9,6 +9,8 @@ option(INSPECT_DISABLE "Disable inspect module" OFF)
 option(BUILD_TESTS "Build tests" OFF)
 option(BUILD_EXAMPLES "Build examples" ON)
 
+include(cmake/xtils-autogen.cmake)
+
 file(GLOB_RECURSE SRCS src/*.cc)
 # Create a single library
 add_library(xtils STATIC ${SRCS})
@@ -84,5 +86,6 @@ configure_package_config_file(
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/xtils-config.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/xtils-config-version.cmake
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/xtils-autogen.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/xtils
 )

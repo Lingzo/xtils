@@ -45,20 +45,20 @@ struct TimerInfo {
 
 // Timer info for steady clock based timers
 struct SteadyTimerInfo : public TimerInfo {
-  time::SteadyTimePoint next_execution;
+  SteadyTimePoint next_execution;
 
   SteadyTimerInfo(TimerId timer_id, TimerCallback cb, TimerType timer_type,
-                  uint32_t interval, time::SteadyTimePoint next_time)
+                  uint32_t interval, SteadyTimePoint next_time)
       : TimerInfo(timer_id, std::move(cb), timer_type, interval),
         next_execution(next_time) {}
 };
 
 // Timer info for system clock based timers
 struct SystemTimerInfo : public TimerInfo {
-  time::SystemTimePoint next_execution;
+  SystemTimePoint next_execution;
 
   SystemTimerInfo(TimerId timer_id, TimerCallback cb, TimerType timer_type,
-                  uint32_t interval, time::SystemTimePoint next_time)
+                  uint32_t interval, SystemTimePoint next_time)
       : TimerInfo(timer_id, std::move(cb), timer_type, interval),
         next_execution(next_time) {}
 };
@@ -112,8 +112,7 @@ class BaseTimer {
 };
 
 // Steady clock based timer (monotonic time, good for relative timers)
-class SteadyTimer
-    : public BaseTimer<time::SteadyTimePoint, SteadyTimerInfo> {
+class SteadyTimer : public BaseTimer<SteadyTimePoint, SteadyTimerInfo> {
  public:
   explicit SteadyTimer(TaskGroup* task_group);
 
@@ -126,19 +125,16 @@ class SteadyTimer
   static uint64_t GetCurrentTimestampMs();
 
   // Get current steady clock time point
-  static time::SteadyTimePoint GetCurrentTimePoint();
+  static SteadyTimePoint GetCurrentTimePoint();
 
  protected:
-  time::SteadyTimePoint GetCurrentTime() const override;
-  uint32_t CalculateDelayMs(
-      const time::SteadyTimePoint& target_time) const override;
-  time::SteadyTimePoint AddMs(const time::SteadyTimePoint& tp,
-                                    uint32_t ms) const override;
+  SteadyTimePoint GetCurrentTime() const override;
+  uint32_t CalculateDelayMs(const SteadyTimePoint& target_time) const override;
+  SteadyTimePoint AddMs(const SteadyTimePoint& tp, uint32_t ms) const override;
 };
 
 // System clock based timer (wall clock time, good for UTC/absolute time)
-class SystemTimer
-    : public BaseTimer<time::SystemTimePoint, SystemTimerInfo> {
+class SystemTimer : public BaseTimer<SystemTimePoint, SystemTimerInfo> {
  public:
   explicit SystemTimer(TaskGroup* task_group);
 
@@ -150,14 +146,12 @@ class SystemTimer
   static uint64_t GetCurrentUtcTimestampMs();
 
   // Get current system clock time point
-  static time::SystemTimePoint GetCurrentTimePoint();
+  static SystemTimePoint GetCurrentTimePoint();
 
  protected:
-  time::SystemTimePoint GetCurrentTime() const override;
-  uint32_t CalculateDelayMs(
-      const time::SystemTimePoint& target_time) const override;
-  time::SystemTimePoint AddMs(const time::SystemTimePoint& tp,
-                                    uint32_t ms) const override;
+  SystemTimePoint GetCurrentTime() const override;
+  uint32_t CalculateDelayMs(const SystemTimePoint& target_time) const override;
+  SystemTimePoint AddMs(const SystemTimePoint& tp, uint32_t ms) const override;
 };
 
 // Convenience aliases

@@ -153,79 +153,65 @@ TimerId BaseTimer<TimePoint, TimerInfoType>::GenerateTimerId() {
 
 // SteadyTimer implementation
 SteadyTimer::SteadyTimer(TaskGroup* task_group)
-    : BaseTimer<time::SteadyTimePoint, SteadyTimerInfo>(task_group) {}
+    : BaseTimer<SteadyTimePoint, SteadyTimerInfo>(task_group) {}
 
 TimerId SteadyTimer::SetAbsoluteTimer(uint64_t timestamp_ms,
                                       TimerCallback callback, TimerType type) {
-  auto target_time = time::steady::FromMs(timestamp_ms);
-  return BaseTimer<time::SteadyTimePoint,
-                   SteadyTimerInfo>::SetAbsoluteTimer(target_time,
-                                                      std::move(callback),
-                                                      type);
+  auto target_time = steady::FromMs(timestamp_ms);
+  return BaseTimer<SteadyTimePoint, SteadyTimerInfo>::SetAbsoluteTimer(
+      target_time, std::move(callback), type);
 }
 
-uint64_t SteadyTimer::GetCurrentTimestampMs() {
-  return time::steady::GetCurrentMs();
-}
+uint64_t SteadyTimer::GetCurrentTimestampMs() { return steady::GetCurrentMs(); }
 
-time::SteadyTimePoint SteadyTimer::GetCurrentTimePoint() {
-  return time::steady::Now();
-}
+SteadyTimePoint SteadyTimer::GetCurrentTimePoint() { return steady::Now(); }
 
-time::SteadyTimePoint SteadyTimer::GetCurrentTime() const {
-  return time::steady::Now();
-}
+SteadyTimePoint SteadyTimer::GetCurrentTime() const { return steady::Now(); }
 
 uint32_t SteadyTimer::CalculateDelayMs(
-    const time::SteadyTimePoint& target_time) const {
-  return time::steady::CalculateDelayMs(target_time);
+    const SteadyTimePoint& target_time) const {
+  return steady::CalculateDelayMs(target_time);
 }
 
-time::SteadyTimePoint SteadyTimer::AddMs(
-    const time::SteadyTimePoint& tp, uint32_t ms) const {
-  return time::steady::AddMs(tp, ms);
+SteadyTimePoint SteadyTimer::AddMs(const SteadyTimePoint& tp,
+                                   uint32_t ms) const {
+  return steady::AddMs(tp, ms);
 }
 
 // SystemTimer implementation
 SystemTimer::SystemTimer(TaskGroup* task_group)
-    : BaseTimer<time::SystemTimePoint, SystemTimerInfo>(task_group) {}
+    : BaseTimer<SystemTimePoint, SystemTimerInfo>(task_group) {}
 
 TimerId SystemTimer::SetAbsoluteUtcTimer(uint64_t utc_timestamp_ms,
                                          TimerCallback callback,
                                          TimerType type) {
-  auto target_time = time::system::FromMs(utc_timestamp_ms);
-  return BaseTimer<time::SystemTimePoint,
-                   SystemTimerInfo>::SetAbsoluteTimer(target_time,
-                                                      std::move(callback),
-                                                      type);
+  auto target_time = system::FromMs(utc_timestamp_ms);
+  return BaseTimer<SystemTimePoint, SystemTimerInfo>::SetAbsoluteTimer(
+      target_time, std::move(callback), type);
 }
 
 uint64_t SystemTimer::GetCurrentUtcTimestampMs() {
-  return time::system::GetCurrentUtcMs();
+  return system::GetCurrentUtcMs();
 }
 
-time::SystemTimePoint SystemTimer::GetCurrentTimePoint() {
-  return time::system::Now();
-}
+SystemTimePoint SystemTimer::GetCurrentTimePoint() { return system::Now(); }
 
-time::SystemTimePoint SystemTimer::GetCurrentTime() const {
-  return time::system::Now();
-}
+SystemTimePoint SystemTimer::GetCurrentTime() const { return system::Now(); }
 
 uint32_t SystemTimer::CalculateDelayMs(
-    const time::SystemTimePoint& target_time) const {
+    const SystemTimePoint& target_time) const {
   // Convert system time to steady time for scheduling
-  auto steady_target = time::system::ToSteadyTime(target_time);
-  return time::steady::CalculateDelayMs(steady_target);
+  auto steady_target = system::ToSteadyTime(target_time);
+  return steady::CalculateDelayMs(steady_target);
 }
 
-time::SystemTimePoint SystemTimer::AddMs(
-    const time::SystemTimePoint& tp, uint32_t ms) const {
-  return time::system::AddMs(tp, ms);
+SystemTimePoint SystemTimer::AddMs(const SystemTimePoint& tp,
+                                   uint32_t ms) const {
+  return system::AddMs(tp, ms);
 }
 
 // Explicit template instantiations
-template class BaseTimer<time::SteadyTimePoint, SteadyTimerInfo>;
-template class BaseTimer<time::SystemTimePoint, SystemTimerInfo>;
+template class BaseTimer<SteadyTimePoint, SteadyTimerInfo>;
+template class BaseTimer<SystemTimePoint, SystemTimerInfo>;
 
 }  // namespace xtils

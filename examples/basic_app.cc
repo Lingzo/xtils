@@ -1,9 +1,7 @@
 #include <chrono>
-#include <cstdint>
-#include <iostream>
-#include <list>
 #include <memory>
 #include <thread>
+#include <vector>
 
 #include "xtils/app/app.h"
 #include "xtils/app/service.h"
@@ -49,7 +47,7 @@ class SimpleService : public xtils::Service {
       LogThis();
     });
 
-    using namespace xtils::time;
+    using namespace xtils;
     for (int i = 0; i <= 10; i++) {
       auto t1 = steady::GetCurrentMs();
       int ms = 1000 * i;
@@ -58,29 +56,26 @@ class SimpleService : public xtils::Service {
         std::this_thread::sleep_for(std::chrono::milliseconds(ms));
       });
     }
-    INSPECT_ROUTE(
-        "/basic_app/trace", "get trace info",
-        [](const xtils::Inspect::Request& req, xtils::Inspect::Response& resp) {
-          std::string tracer;
-          TRACE_DATA(&tracer);
-          resp = xtils::Inspect::Text(tracer);
-        });
+    INSPECT_ROUTE("/basic_app/trace", "get trace info",
+                  [](const Inspect::Request& req, Inspect::Response& resp) {
+                    std::string tracer;
+                    TRACE_DATA(&tracer);
+                    resp = Inspect::Text(tracer);
+                  });
   }
 
   void deinit() override { LogI("Deinit"); }
 };
 
 // call by xtils
-void app_version(uint32_t& major, uint32_t& minor, uint32_t& patch,
-                 std::string& build_time) {
+void app_version(uint32_t& major, uint32_t& minor, uint32_t& patch) {
   major = 0;
   minor = 1;
   patch = 2;
-  build_time = __DATE__ " " __TIME__;
 }
 
 // call by xtils
-void app_main(int argc, char** argv) {
+void app_main(xtils::App& ctx, const std::vector<std::string>& args) {
   // setup service
-  setup_srv(std::make_shared<SimpleService>());
+  ctx.registor(std::make_shared<SimpleService>());
 }

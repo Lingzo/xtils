@@ -4,7 +4,6 @@
 #include <cstdint>
 
 namespace xtils {
-namespace time {
 
 // Type aliases for different time representations
 using SteadyTimePoint = std::chrono::steady_clock::time_point;
@@ -70,5 +69,4 @@ uint64_t TimeDiffMs(const SystemTimePoint& tp1, const SystemTimePoint& tp2);
 uint32_t ClampDelayMs(int64_t delay_ms);
 }  // namespace common
 
-}  // namespace time
 }  // namespace xtils

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <vector>
 
 #include "xtils/config/config.h"
 #include "xtils/tasks/event.h"
@@ -28,7 +29,8 @@ class App {
 
  public:
   // until shutdown
-  void run(int argc, char* argv[]);
+  void run();
+  void init(const std::vector<std::string>& args);
 
   void PostTask(Task task);
   void PostAsyncTask(Task task, Task main = nullptr);
@@ -44,10 +46,11 @@ class App {
   const Config& conf() { return config_; }
 
  private:
-  void init(int argc, char* argv[]);
-  void run();
-
   void deinit();
+
+  void parse_args(const std::vector<std::string>& args);
+
+  void pre_run();
 
   // init
   void default_config();
@@ -63,6 +66,12 @@ class App {
   std::list<std::shared_ptr<Service>> service_;
   bool running_ = false;
   bool initialized_ = false;
+  std::vector<std::string> args_;
+
+  uint32_t major_;
+  uint32_t minor_;
+  uint32_t patch_;
+  std::string build_time_;
 };
 
 }  // namespace xtils
