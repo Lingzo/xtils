@@ -9,7 +9,7 @@ option(INSPECT_DISABLE "Disable inspect module" OFF)
 option(BUILD_TESTS "Build tests" OFF)
 option(BUILD_EXAMPLES "Build examples" ON)
 
-include(cmake/xtils-autogen.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/xtils-autogen.cmake)
 
 file(GLOB_RECURSE SRCS src/*.cc)
 # Create a single library

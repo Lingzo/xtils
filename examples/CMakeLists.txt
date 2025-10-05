@@ -25,6 +25,7 @@ add_example(tcp_example tcp_example.cc)
 add_example(timer_example timer_example.cc)
 add_example(udp_example udp_example.cc)
 add_example(udp_multicast_example udp_multicast_example.cc)
+add_example(cron_scheduler_example cron_scheduler_example.cc)
 
 # Optional: Create a custom target to build all examples
 add_custom_target(examples
@@ -34,8 +35,10 @@ add_custom_target(examples
         inspect_example
         logger_example
         tcp_example
+        timer_example
         udp_example
         udp_multicast_example
+        cron_scheduler_example
 )
 
 # Installation (optional)
@@ -45,8 +48,10 @@ install(TARGETS
     inspect_example
     logger_example
     tcp_example
+    timer_example
     udp_example
     udp_multicast_example
+    cron_scheduler_example
     DESTINATION ${CMAKE_INSTALL_BINDIR}/examples
     OPTIONAL
 )
