@@ -236,6 +236,8 @@ TEST_CASE("CronScheduler: Multiple tasks and cancellation in real mode") {
     seconds_for_cron.clear();
     seconds_for_cron.insert(tm_now.tm_sec + 2);
     seconds_for_cron.insert(tm_now.tm_sec + 7);
+  } else {
+    std::this_thread::sleep_for(std::chrono::seconds(60 - tm_now.tm_sec));
   }
   auto cron_task_id =
       scheduler.cron(seconds_for_cron, {}, {}, {}, {}, {}, [&]() {

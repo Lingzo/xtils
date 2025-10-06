@@ -284,8 +284,8 @@ void HttpServerConnection::UpgradeToWebsocket(const HttpRequest& req) {
   if (origin_allowed_.empty())
     return SendResponseAndClose("403 Forbidden", {}, "Origin not allowed");
 
-  auto ws_ver = req.GetHeader("sec-webSocket-version").value_or({});
-  auto ws_key = req.GetHeader("sec-webSocket-key").value_or({});
+  auto ws_ver = req.GetHeader("sec-webSocket-version").value_or("");
+  auto ws_key = req.GetHeader("sec-webSocket-key").value_or("");
 
   if (!StringView(ws_ver).CaseInsensitiveEq("13"))
     return SendResponseAndClose("505 HTTP Version Not Supported", {});

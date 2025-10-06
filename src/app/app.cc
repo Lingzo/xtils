@@ -99,7 +99,6 @@ void App::init_log() {
     int max_bytes = conf().get_int("xtils.log.file.max_bytes");
     int max_items = conf().get_int("xtils.log.file.max_items");
     if (!file_utils::exists(file)) {
-      LogI("%s == ", file_utils::dirname(file).c_str());
       bool create_dir = file_utils::mkdir(file_utils::dirname(file));
       if (!create_dir) {
         LogE("can't open log file, %s", file.c_str());

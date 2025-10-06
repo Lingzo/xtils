@@ -37,6 +37,7 @@ target_link_options(xtils PUBLIC
     $<$<CONFIG:RelWithDebInfo>:-rdynamic -Wl,--as-needed -Wl,--gc-sections>)
 
 if(BUILD_TESTS)
+    enable_testing()
     add_subdirectory(tests)
 endif()
 if(BUILD_EXAMPLES)

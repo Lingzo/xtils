@@ -300,7 +300,7 @@ TEST_CASE("FSM DOT Graph Generation") {
 
     // Current state should be highlighted
     CHECK(dot.find("Process") != std::string::npos);
-    CHECK(dot.find("fillcolor=lightblue") != std::string::npos);
+    CHECK(dot.find("style=filled,color=red") != std::string::npos);
   }
 }
 
