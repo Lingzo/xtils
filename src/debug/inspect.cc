@@ -603,11 +603,14 @@ class Impl : public HttpRequestHandler {
     std::string html = R"(<!DOCTYPE html>
           <html>
           <head>
-          <title>Inspect Server</title>
-          <meta http-equiv="refresh" content="10">
+          <title>XTILS Inspect Server</title>
           <meta charset="UTF-8">
           </head>
           <body>
+          <div style="position:fixed;right:10px;top:10px;display:grid;">
+          <button onclick='location.reload()' style='padding:4px 8px;margin:10px 0px;'>ReLoad</button>
+          <a href="https://github.com/Lingzo/xtils">README</a>
+          </div>
           <h1>Inspect Server - Port {{PORT}}</h1>
           <h2>Available Routes</h2>
           <ul>{{ROUTES}}</ul>

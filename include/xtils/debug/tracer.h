@@ -106,7 +106,7 @@ class Tracer {
     out->clear();
     out->reserve(count * 512);
     auto append = [&](const std::string &str) { out->append(str); };
-    append(R"({"traceEvents":[\n)");
+    append("{\"traceEvents\":[\n");
     for (size_t i = 0; i < count; ++i) {
       size_t idx = (start + i) % MAX_EVENTS;
       append(events_[idx].toJSON());
