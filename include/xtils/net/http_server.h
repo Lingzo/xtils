@@ -9,6 +9,7 @@
 #include <string>
 
 #include "xtils/net/http_common.h"
+#include "xtils/net/websocket_common.h"
 #include "xtils/system/paged_memory.h"
 #include "xtils/system/unix_socket.h"
 #include "xtils/tasks/task_runner.h"
@@ -100,7 +101,7 @@ class HttpServerConnection {
   void SendWebsocketMessage(StringView sv) {
     SendWebsocketMessage(sv.data(), sv.size());
   }
-  void SendWebsocketFrame(uint8_t opcode, const void* payload,
+  void SendWebsocketFrame(WebSocketOpcode opcode, const void* payload,
                           size_t payload_len);
 
   bool is_websocket() const { return is_websocket_; }

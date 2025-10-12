@@ -126,6 +126,7 @@ int main() {
 
   INSPECT_WEBSOCKET("/ping", "支持http和ws",
                     [](const Inspect::Request &req, Inspect::Response &resp) {
+                      LogI("/ping %s", req.body.c_str());
                       resp = Inspect::Text("pong");
                     });
 

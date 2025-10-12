@@ -50,9 +50,9 @@ bool TcpClient::Connect(const std::string& address, uint16_t port) {
 }
 
 bool TcpClient::ConnectToHost(const std::string& hostname, uint16_t port) {
-  // For simplicity, we'll treat hostname as an IP address
-  // In a full implementation, you'd want to resolve the hostname first
-  return Connect(hostname, port);
+  // TODO: Implement hostname resolution and connection logic
+  std::string address = hostname;
+  return Connect(address, port);
 }
 
 void TcpClient::Disconnect() {

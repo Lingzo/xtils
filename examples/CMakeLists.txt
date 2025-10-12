@@ -26,6 +26,7 @@ add_example(timer_example timer_example.cc)
 add_example(udp_example udp_example.cc)
 add_example(udp_multicast_example udp_multicast_example.cc)
 add_example(cron_scheduler_example cron_scheduler_example.cc)
+add_example(websocket_client_example websocket_client_example.cc)
 
 # Optional: Create a custom target to build all examples
 add_custom_target(examples
@@ -39,6 +40,7 @@ add_custom_target(examples
         udp_example
         udp_multicast_example
         cron_scheduler_example
+        websocket_client_example
 )
 
 # Installation (optional)
@@ -52,6 +54,7 @@ install(TARGETS
     udp_example
     udp_multicast_example
     cron_scheduler_example
+    websocket_client_example
     DESTINATION ${CMAKE_INSTALL_BINDIR}/examples
     OPTIONAL
 )

@@ -12,7 +12,6 @@ function(add_xtils_test TARGET_NAME)
     set_property(TEST ${TARGET_NAME}
         PROPERTY ENVIRONMENT "DOCTEST_CONFIG_COLORS_ANSI=1")
 endfunction()
-message( ------ ${CMAKE_CURRENT_BINARY_DIR})
 
 add_xtils_test(test_fsm fsm_test.cc)
 add_xtils_test(test_json json_test.cc)

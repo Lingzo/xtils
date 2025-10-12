@@ -3,8 +3,7 @@
 #include <vector>
 
 #include "xtils/logging/logger.h"
-#include "xtils/utils/base64.h"
-#include "xtils/utils/sha1.h"
+#include "xtils/net/websocket_common.h"
 #include "xtils/utils/string_utils.h"
 #include "xtils/utils/string_view.h"
 
@@ -13,25 +12,6 @@ namespace xtils {
 namespace {
 constexpr size_t kMaxPayloadSize = 64 * 1024 * 1024;
 constexpr size_t kMaxRequestSize = kMaxPayloadSize + 4096;
-
-enum WebsocketOpcode : uint8_t {
-  kOpcodeContinuation = 0x0,
-  kOpcodeText = 0x1,
-  kOpcodeBinary = 0x2,
-  kOpcodeDataUnused = 0x3,
-  kOpcodeClose = 0x8,
-  kOpcodePing = 0x9,
-  kOpcodePong = 0xA,
-  kOpcodeControlUnused = 0xB,
-};
-
-// From https://datatracker.ietf.org/doc/html/rfc6455#section-1.3.
-constexpr char kWebsocketGuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-
-inline uint16_t HostToBE16(uint16_t x) { return __builtin_bswap16(x); }
-inline uint32_t HostToBE32(uint32_t x) { return __builtin_bswap32(x); }
-inline uint64_t HostToBE64(uint64_t x) { return __builtin_bswap64(x); }
-
 }  // namespace
 
 HttpServer::HttpServer(TaskRunner* task_runner, HttpRequestHandler* req_handler)
@@ -152,8 +132,10 @@ size_t HttpServer::ParseOneHttpRequest(HttpServerConnection* conn) {
   StringView buf_view(rxbuf, conn->rxbuf_used);
   bool has_parsed_first_line = false;
   bool all_headers_received = false;
+  bool has_origin = false;
   HttpRequest http_req(conn);
   size_t body_size = 0;
+  LogT("%s", buf_view.ToStr().c_str());
 
   // This loop parses the HTTP request headers and sets the |body_offset|.
   while (!buf_view.empty()) {
@@ -179,14 +161,14 @@ size_t HttpServer::ParseOneHttpRequest(HttpServerConnection* conn) {
       http_req.uri = line.substr(space + 1, uri_size);
     } else if (line.empty()) {
       all_headers_received = true;
+      if (!has_origin) conn->origin_allowed_ = "*";  // support c/py/nodejs
       // The CR-LF marker that separates headers from body.
       break;
     } else {
       // Parse HTTP headers, e.g. "Content-Length: 1234".
       size_t col = line.find(':');
       if (col == StringView::npos) {
-        // DLOG("[HTTP] Malformed HTTP header: \"%s\"",
-        //               line.ToStr().c_str());
+        LogT("[HTTP] Malformed HTTP header: \"%s\"", line.ToStr().c_str());
         conn->SendResponseAndClose("400 Bad Request", {}, "Bad HTTP header");
         return 0;
       }
@@ -203,6 +185,7 @@ size_t HttpServer::ParseOneHttpRequest(HttpServerConnection* conn) {
       if (hdr_name.CaseInsensitiveEq("content-length")) {
         body_size = static_cast<size_t>(atoi(hdr_value.ToStr().c_str()));
       } else if (hdr_name.CaseInsensitiveEq("origin")) {
+        has_origin = true;
         http_req.origin = hdr_value;
         if (IsOriginAllowed(hdr_value))
           conn->origin_allowed_ = hdr_value.ToStr();
@@ -305,10 +288,8 @@ void HttpServerConnection::UpgradeToWebsocket(const HttpRequest& req) {
   // SHA-1 hash (160 bits) [FIPS.180-3], base64-encoded (see Section 4 of
   // [RFC4648]), of this concatenation is then returned in the server's
   // handshake.
-  StackString<128> signed_nonce("%.*s%s", static_cast<int>(ws_key.size()),
-                                ws_key.data(), kWebsocketGuid);
-  auto digest = SHA1Hash(signed_nonce.c_str(), signed_nonce.len());
-  std::string digest_b64 = Base64Encode(digest.data(), digest.size());
+  std::string digest_b64 = WebSocketUtils::ComputeWebSocketAccept(
+      std::string(ws_key.data(), ws_key.size()));
 
   HttpHeaders headers = {
       {"Upgrade", "websocket"},              //
@@ -360,7 +341,7 @@ size_t HttpServer::ParseOneWebsocketFrame(HttpServerConnection* conn) {
 
   uint8_t h0 = *(rd++);
   uint8_t h1 = *(rd++);
-  const uint8_t opcode = h0 & 0x0F;
+  const WebSocketOpcode opcode = static_cast<WebSocketOpcode>(h0 & 0x0F);
 
   const bool has_mask = !!(h1 & 0x80);
   uint64_t payload_len_u64 = (h1 & 0x7F);
@@ -382,8 +363,8 @@ size_t HttpServer::ParseOneWebsocketFrame(HttpServerConnection* conn) {
   }
 
   if (payload_len_u64 >= kMaxPayloadSize) {
-    // ELOG("[HTTP] Websocket payload too big (%" PRIu64 " > %zu)",
-    //               payload_len_u64, kMaxPayloadSize);
+    LogD("[HTTP] Websocket payload too big (%ll > %zu)", payload_len_u64,
+         kMaxPayloadSize);
     conn->Close();
     return 0;
   }
@@ -393,7 +374,7 @@ size_t HttpServer::ParseOneWebsocketFrame(HttpServerConnection* conn) {
     // https://datatracker.ietf.org/doc/html/rfc6455#section-5.1
     // The server MUST close the connection upon receiving a frame that is
     // not masked.
-    // ELOG("[HTTP] Websocket inbound frames must be masked");
+    LogD("[HTTP] Websocket inbound frames must be masked");
     conn->Close();
     return 0;
   }
@@ -411,26 +392,23 @@ size_t HttpServer::ParseOneWebsocketFrame(HttpServerConnection* conn) {
   for (uint32_t i = 0; i < payload_len; ++i)
     payload_start[i] ^= mask[i % sizeof(mask)];
 
-  if (opcode == kOpcodePing) {
+  if (opcode == WebSocketOpcode::kPing) {
     LogD("[HTTP] Websocket PING");
-    conn->SendWebsocketFrame(kOpcodePong, payload_start, payload_len);
-  } else if (opcode == kOpcodeBinary || opcode == kOpcodeText ||
-             opcode == kOpcodeContinuation) {
+    conn->SendWebsocketFrame(WebSocketOpcode::kPong, payload_start,
+                             payload_len);
+  } else if (opcode == WebSocketOpcode::kBinary ||
+             opcode == WebSocketOpcode::kText ||
+             opcode == WebSocketOpcode::kContinuation) {
     // We do NOT handle fragmentation. We propagate all fragments as individual
     // messages, breaking the message-oriented nature of websockets. We do this
     // because in all our use cases we need only a byte stream without caring
     // about message boundaries.
-    // If we wanted to support fragmentation, we'd have to stash
-    // kOpcodeContinuation messages in a buffer, until we FIN bit is set.
-    // When loading traces with trace processor, the messages can be up to
-    // 32MB big (SLICE_SIZE in trace_stream.ts). The double-buffering would
-    // slow down significantly trace loading with no benefits.
     WebsocketMessage msg(conn);
     msg.data =
         StringView(reinterpret_cast<const char*>(payload_start), payload_len);
-    msg.is_text = opcode == kOpcodeText;
+    msg.is_text = opcode == WebSocketOpcode::kText;
     req_handler_->OnWebsocketMessage(msg);
-  } else if (opcode == kOpcodeClose) {
+  } else if (opcode == WebSocketOpcode::kClose) {
     conn->Close();
   } else {
     LogW("Unsupported WebSocket opcode: %d", opcode);
@@ -513,39 +491,21 @@ void HttpServerConnection::SendResponse(const char* http_code,
 }
 
 void HttpServerConnection::SendWebsocketMessage(const void* data, size_t len) {
-  SendWebsocketFrame(kOpcodeBinary, data, len);
+  SendWebsocketFrame(WebSocketOpcode::kBinary, data, len);
 }
 void HttpServerConnection::SendWebsocketMessageText(const void* data,
                                                     size_t len) {
-  SendWebsocketFrame(kOpcodeText, data, len);
+  SendWebsocketFrame(WebSocketOpcode::kText, data, len);
 }
 
-void HttpServerConnection::SendWebsocketFrame(uint8_t opcode,
+void HttpServerConnection::SendWebsocketFrame(WebSocketOpcode opcode,
                                               const void* payload,
                                               size_t payload_len) {
   CHECK(is_websocket_);
 
-  uint8_t hdr[10]{};
-  uint32_t hdr_len = 0;
-
-  hdr[0] = opcode | 0x80 /* FIN=1, no fragmentation */;
-  if (payload_len < 126) {
-    hdr_len = 2;
-    hdr[1] = static_cast<uint8_t>(payload_len);
-  } else if (payload_len < 0xffff) {
-    hdr_len = 4;
-    hdr[1] = 126;  // Special value: Header extends for 2 bytes.
-    uint16_t len_be = HostToBE16(static_cast<uint16_t>(payload_len));
-    memcpy(&hdr[2], &len_be, sizeof(len_be));
-  } else {
-    hdr_len = 10;
-    hdr[1] = 127;  // Special value: Header extends for 4 bytes.
-    uint64_t len_be = HostToBE64(payload_len);
-    memcpy(&hdr[2], &len_be, sizeof(len_be));
-  }
-
-  sock->Send(hdr, hdr_len);
-  if (payload && payload_len > 0) sock->Send(payload, payload_len);
+  auto frame_data = WebSocketUtils::BuildFrame(
+      opcode, payload, payload_len, true /* fin */, false /* mask */);
+  sock->Send(frame_data.data(), frame_data.size());
 }
 
 HttpServerConnection::HttpServerConnection(std::unique_ptr<UnixSocket> s)
