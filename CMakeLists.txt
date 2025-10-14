@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 option(INSPECT_DISABLE "Disable inspect module" OFF)
 option(BUILD_TESTS "Build tests" OFF)
-option(BUILD_EXAMPLES "Build examples" ON)
+option(BUILD_EXAMPLES "Build examples" OFF)
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/xtils-autogen.cmake)
 

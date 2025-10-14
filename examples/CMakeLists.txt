@@ -55,6 +55,6 @@ install(TARGETS
     udp_multicast_example
     cron_scheduler_example
     websocket_client_example
-    DESTINATION ${CMAKE_INSTALL_BINDIR}/examples
+    DESTINATION share/${PROJECT_NAME}/examples
     OPTIONAL
 )
