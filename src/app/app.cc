@@ -29,6 +29,11 @@
 namespace xtils {
 
 App::App() { default_config(); }
+App::~App() {
+  if (main_.joinable()) {
+    main_.join();
+  }
+}
 
 App *App::ins() {
   static App app;
@@ -39,14 +44,14 @@ void App::default_config() {
   config_.define("xtils.threads", "threds numbers", 4)
       .define("xtils.inspect.enable", "enable inspect or not", true)
       .define("xtils.inspect.port", "inspect prot", 9090)
-      .define("xtils.inspect.addr", "inspect address", "127.0.0.1")
+      .define("xtils.inspect.addr", "inspect address", "0.0.0.0")
       .define("xtils.inspect.cors", "inspect cross addr", "*")
       .define("xtils.log.file.name", "log file name,default in current dir",
               "./app.log")
       .define("xtils.log.file.max_bytes", "log file size, default 4M",
               4 * 1024 * 1024)
       .define("xtils.log.file.max_items", "max file number, app.max.log", 5)
-      .define("xtils.log.file.enable", "log to file or not", true)
+      .define("xtils.log.file.enable", "log to file or not", false)
       .define("xtils.log.level",
               "log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error", 1)
       .define("xtils.log.console.enable", "log to console or not", true);
@@ -184,6 +189,14 @@ void App::pre_run() {
   }
 }
 
+void App::run_daemon() {
+  if (running_) {
+    LogW("App is already running");
+    return;
+  }
+  main_ = std::thread(std::bind(&App::run, this));
+}
+
 void App::run() {
   CHECK(initialized_);
   if (running_) {
@@ -291,4 +304,6 @@ void App::registor(std::shared_ptr<Service> p) {
   CHECK(!running_);
   service_.push_back(p);
 }
+
+bool App::is_running() { return running_; }
 }  // namespace xtils

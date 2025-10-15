@@ -224,8 +224,11 @@ class Logger::Impl {
     std::string formatted_message = format_log_message(entry);
 
     std::lock_guard<std::mutex> lock(sinks_mutex_);
-    if (sinks_.empty())
-      write(STDOUT_FILENO, formatted_message.c_str(), formatted_message.size());
+    if (sinks_.empty()) {
+      auto ret = write(STDOUT_FILENO, formatted_message.c_str(),
+                       formatted_message.size());
+      (void)ret;
+    }
     for (auto& sink : sinks_) {
       if (sink) {
         sink->write(formatted_message.c_str(), 0, formatted_message.size());

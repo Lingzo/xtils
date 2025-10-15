@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include "xtils/config/config.h"
@@ -21,7 +22,7 @@ class App {
   App();
 
  public:
-  ~App() = default;
+  ~App();
   static App* ins();
 
   void registor(std::list<std::shared_ptr<Service>> services);
@@ -30,7 +31,10 @@ class App {
  public:
   // until shutdown
   void run();
+  // run in backgroud
+  void run_daemon();
   void init(const std::vector<std::string>& args);
+  bool is_running();
 
   void PostTask(Task task);
   void PostAsyncTask(Task task, Task main = nullptr);
@@ -67,6 +71,7 @@ class App {
   bool running_ = false;
   bool initialized_ = false;
   std::vector<std::string> args_;
+  std::thread main_;
 
   uint32_t major_;
   uint32_t minor_;
