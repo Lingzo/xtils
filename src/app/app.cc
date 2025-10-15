@@ -11,7 +11,7 @@
 #include <string>
 #include <thread>
 
-#include "build_info.h"  // auto generated
+#include "xtils/app/auto-gen.h"
 #include "xtils/app/service.h"
 #include "xtils/debug/inspect.h"
 #include "xtils/debug/tracer.h"
@@ -30,7 +30,7 @@ namespace xtils {
 
 App::App() { default_config(); }
 
-App* App::ins() {
+App *App::ins() {
   static App app;
   return &app;
 }
@@ -51,7 +51,7 @@ void App::default_config() {
               "log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error", 1)
       .define("xtils.log.console.enable", "log to console or not", true);
 }
-void App::parse_args(const std::vector<std::string>& args) {
+void App::parse_args(const std::vector<std::string> &args) {
   if (!config_.parse_args(args)) {
     std::cerr << "Failed to parse command line arguments" << std::endl;
     std::cerr << config_.help() << std::endl;
@@ -62,14 +62,14 @@ void App::parse_args(const std::vector<std::string>& args) {
   if (!config_.validate()) {
     std::cerr << "Configuration validation failed:" << std::endl;
     auto missing = config_.missing_required();
-    for (const auto& key : missing) {
+    for (const auto &key : missing) {
       std::cerr << "  Missing required parameter: " << key << std::endl;
     }
     std::cerr << config_.help() << std::endl;
     exit(1);
   }
 }
-void App::init(const std::vector<std::string>& args) {
+void App::init(const std::vector<std::string> &args) {
   TRACE_SCOPE("App:init");
   // Setup signal handlers for graceful shutdown
   system::SignalHandler::Initialize();
@@ -132,17 +132,17 @@ void App::init_inspect() {
 
   if (conf().get_bool("xtils.inspect.enable")) {
     INSPECT_ROUTE("/api/config", "config in process",
-                  [this](const Inspect::Request& req, Inspect::Response& resp) {
+                  [this](const Inspect::Request &req, Inspect::Response &resp) {
                     resp = Inspect::Json(config_.to_json());
                   });
     INSPECT_ROUTE("/api/tracer", "get tracer info",
-                  [this](const Inspect::Request& req, Inspect::Response& resp) {
+                  [this](const Inspect::Request &req, Inspect::Response &resp) {
                     std::string tracer;
                     TRACE_DATA(&tracer);
                     resp = Inspect::Text(tracer);
                   });
     INSPECT_ROUTE("/api/version", "get version info",
-                  [this](const Inspect::Request& req, Inspect::Response& resp) {
+                  [this](const Inspect::Request &req, Inspect::Response &resp) {
                     Json version;
                     version["major"] = major_;
                     version["minor"] = minor_;
@@ -156,9 +156,9 @@ void App::init_inspect() {
 
 void App::pre_run() {
   // all config
-  for (const auto& s : service_) {
-    for (const auto& e : s->config.options()) {
-      const auto& opt = e.second;
+  for (const auto &s : service_) {
+    for (const auto &e : s->config.options()) {
+      const auto &opt = e.second;
       config_.define(s->name + "." + opt.name, opt.description,
                      opt.default_value, opt.required);
     }
@@ -167,7 +167,7 @@ void App::pre_run() {
   parse_args(args_);  // again with sub services
 
   // sub config
-  for (auto& s : service_) {
+  for (auto &s : service_) {
     auto sub = config_.get(s->name);
     if (sub) {
       s->config.parse_json(*sub);
@@ -177,7 +177,7 @@ void App::pre_run() {
   print_banner();
   init_inspect();
 
-  for (auto& p : service_) {
+  for (auto &p : service_) {
     p->ctx = this;
     p->init();
     LogI("Init %s service successed!!", p->name.c_str());
@@ -222,7 +222,7 @@ void App::deinit() {
   }
 #endif
 
-  for (auto& p : service_) {
+  for (auto &p : service_) {
     p->deinit();
   }
   em_.reset();
@@ -247,7 +247,7 @@ void App::PostAsyncTask(Task task, Task main) {
   });
 }
 
-void App::emit(const Event& e) { em_->emit(e); }
+void App::emit(const Event &e) { em_->emit(e); }
 
 void App::connect(EventId id, OnEvent cb) { em_->emit(id, cb); }
 
@@ -260,7 +260,7 @@ void App::delay(uint32_t ms, TimerCallback cb) {
 }
 
 void App::print_banner() {
-  build_time_ = BUILD_TIME;
+  build_time_ = XTILS_BUILD_TIME;
   app_version(major_, minor_, patch_);
   const std::string fmt = R"(
 ================ XTILS =================
@@ -270,7 +270,7 @@ void App::print_banner() {
 ========================================
 )";
   std::stringstream ss;
-  for (auto& s : service_) {
+  for (auto &s : service_) {
     ss << s->name << " ";
   }
   std::string names = ss.str();
@@ -282,7 +282,7 @@ void App::print_banner() {
 
 void App::registor(std::list<std::shared_ptr<Service>> services) {
   CHECK(!running_);
-  for (auto& p : services) {
+  for (auto &p : services) {
     registor(p);
   }
 }

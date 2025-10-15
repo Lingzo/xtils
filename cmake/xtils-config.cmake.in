@@ -15,6 +15,7 @@ check_required_components(xtils)
 # Provide the imported target
 if(TARGET xtils::xtils)
     get_target_property(_xtils_type xtils::xtils TYPE)
+    target_link_libraries(xtils::xtils INTERFACE xtils-autogen)
     if(_xtils_type STREQUAL "STATIC_LIBRARY")
         set(xtils_LIBRARIES xtils::xtils)
     else()

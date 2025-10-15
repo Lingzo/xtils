@@ -8,6 +8,7 @@ function(add_example name source)
     add_executable(${name} ${source})
     target_link_libraries(${name}
         xtils
+        xtils-autogen
         Threads::Threads
     )
     # Set output directory
