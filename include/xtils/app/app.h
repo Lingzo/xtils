@@ -52,7 +52,8 @@ class App {
  private:
   void deinit();
 
-  void parse_args(const std::vector<std::string>& args);
+  void parse_args(const std::vector<std::string>& args,
+                  bool allow_exit = false);
 
   void pre_run();
 

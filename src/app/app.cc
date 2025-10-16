@@ -56,8 +56,8 @@ void App::default_config() {
               "log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error", 1)
       .define("xtils.log.console.enable", "log to console or not", true);
 }
-void App::parse_args(const std::vector<std::string> &args) {
-  if (!config_.parse_args(args)) {
+void App::parse_args(const std::vector<std::string> &args, bool allow_exit) {
+  if (!config_.parse_args(args, allow_exit)) {
     std::cerr << "Failed to parse command line arguments" << std::endl;
     std::cerr << config_.help() << std::endl;
     exit(1);
@@ -81,7 +81,7 @@ void App::init(const std::vector<std::string> &args) {
 
   args_ = args;  // cache command line arguments
   // Parse command line arguments and load configuration
-  parse_args(args);
+  parse_args(args, false);  // don't exit on help
 
   init_log();
 
@@ -169,7 +169,7 @@ void App::pre_run() {
     }
   }
 
-  parse_args(args_);  // again with sub services
+  parse_args(args_, true);  // again with sub services
 
   // sub config
   for (auto &s : service_) {
@@ -224,6 +224,7 @@ void App::run() {
   LogI("App shutting down...");
   deinit();
   LogI("Exit main");
+  logger::default_logger()->shutdown();  // flush all log
   running_ = false;
 }
 

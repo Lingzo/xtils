@@ -50,8 +50,9 @@ class Config {
   // Loading methods
   // parse_args supports --config-file parameter to load configuration file
   // first, then command line arguments can override file settings
-  bool parse_args(int argc, const char** argv);
-  bool parse_args(const std::vector<std::string>& args);
+  bool parse_args(int argc, const char** argv, bool allow_exit = false);
+  bool parse_args(const std::vector<std::string>& args,
+                  bool allow_exit = false);
   bool load_file(const std::string& filename);
   bool parse_json(const Json& json);
   bool parse(const std::string& json_content);

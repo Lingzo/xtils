@@ -27,11 +27,11 @@ Config& Config::define(const std::string& name, const std::string& description,
   return *this;
 }
 
-bool Config::parse_args(int argc, const char** argv) {
+bool Config::parse_args(int argc, const char** argv, bool allow_exit) {
   return parse_args(std::vector<std::string>(argv, argv + argc));
 }
 
-bool Config::parse_args(const std::vector<std::string>& args) {
+bool Config::parse_args(const std::vector<std::string>& args, bool allow_exit) {
   // First, apply default values
   apply_defaults();
   no_parsed_.clear();
@@ -62,11 +62,11 @@ bool Config::parse_args(const std::vector<std::string>& args) {
     std::string arg = args[i];
 
     // Skip help flags
-    if (arg == "-h" || arg == "--help") {
+    if ((arg == "-h" || arg == "--help") && allow_exit) {
       std::cout << help() << std::endl;
       exit(0);
     }
-    if (arg == "--dump") {
+    if (arg == "--dump" && allow_exit) {
       print();
       exit(0);
     }
