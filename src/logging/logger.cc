@@ -30,7 +30,6 @@
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -71,7 +70,7 @@ thread_local struct {
     }
 
     // Add milliseconds
-    snprintf(date_buffer + 19, 8, ".%03d", (int)(tp.tv_nsec / 1e6));
+    snprintf(date_buffer + 19, 8, ".%06d", (int)(tp.tv_nsec / 1e3));
     return date_buffer;
   }
 } time_formatter;
@@ -237,25 +236,32 @@ class Logger::Impl {
   }
 
   inline std::string format_log_message(const LogEntry& entry) {
-    const char* filename = entry.file_name.c_str();
     bool use_color = isatty(STDOUT_FILENO);
 
-    std::ostringstream oss;
+    std::string out;
+    out.reserve(entry.message.size() + 128);  // pre allocate
 
     if (use_color) {
-      oss << COLORS[entry.level];
+      out.append(COLORS[entry.level]);
     }
-
-    oss << to_string(entry.level) << " " << entry.timestamp << " " << entry.tag
-        << " " << entry.function_name << " " << entry.message << " ---- "
-        << filename << ":" << entry.line;
+    out.append(to_string(entry.level));
+    out.append(" ");
+    out.append(entry.timestamp);
+    out.append(" ");
+    out.append(entry.tag);
+    out.append(" ");
+    out.append(entry.file_name);
+    out.append(":");
+    out.append(std::to_string(entry.line));
+    out.append(" ");
+    out.append(entry.message);
 
     if (use_color) {
-      oss << RESET_COLOR;
+      out.append(RESET_COLOR);
     }
 
-    oss << "\n";
-    return oss.str();
+    out.append("\n");
+    return out;
   }
 
   mutable std::mutex level_mutex_;
