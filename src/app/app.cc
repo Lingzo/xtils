@@ -195,7 +195,7 @@ void App::run_daemon() {
     return;
   }
   main_ = std::thread(std::bind(&App::run, this));
-  while (!running_) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  bool ret = tg_->RunUntilCompleted([]() { return true; });
 }
 
 void App::run() {

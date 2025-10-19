@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <thread>
 
 #include "xtils/tasks/unix_task_runner.h"
@@ -18,6 +19,14 @@ class ThreadTaskRunner : public TaskRunner {
   static ThreadTaskRunner CreateAndStart(const std::string& name = "") {
     return ThreadTaskRunner(name);
   }
+
+  static std::shared_ptr<ThreadTaskRunner> CreateAndStartShared(
+      const std::string& name = "") {
+    return std::make_shared<ThreadTaskRunner>(name);
+  }
+
+  // no use directly
+  explicit ThreadTaskRunner(const std::string& name);
 
   ThreadTaskRunner(const ThreadTaskRunner&) = delete;
   ThreadTaskRunner& operator=(const ThreadTaskRunner&) = delete;
@@ -39,12 +48,10 @@ class ThreadTaskRunner : public TaskRunner {
   bool RunsTasksOnCurrentThread() const override;
 
  private:
-  explicit ThreadTaskRunner(const std::string& name);
   void RunTaskThread(std::function<void(UnixTaskRunner*)> initializer);
 
   std::thread thread_;
   std::string name_;
   UnixTaskRunner* task_runner_ = nullptr;
 };
-
 }  // namespace xtils

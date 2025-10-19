@@ -21,7 +21,6 @@
 #include <string>
 
 #include "xtils/logging/sink.h"
-#include "xtils/system/signal_handler.h"
 
 #ifndef LOG_TAG_STRING
 #define LOG_TAG_STRING "default"
@@ -135,13 +134,12 @@ void _write_log(logger::Logger* log, const char* name,
 #define LogThis() LogI("======>> THIS <<=====")
 
 // Assertion and fatal error macros
-#define CHECK(expr)                                 \
-  do {                                              \
-    if (!(expr)) {                                  \
-      LogE("Assert -- " #expr " -- \n%s",           \
-           xtils::system::GetStackTrace().c_str()); \
-      xtils::system::SignalHandler::Shutdown();     \
-    }                                               \
+#define CHECK(expr)                    \
+  do {                                 \
+    if (!(expr)) {                     \
+      LogE("Assert -- " #expr " -- "); \
+      abort();                         \
+    }                                  \
   } while (0)
 
 #define DCHECK(expr) CHECK(expr)

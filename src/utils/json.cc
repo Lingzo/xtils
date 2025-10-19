@@ -1,6 +1,6 @@
 #include "xtils/utils/json.h"
 
-#include <functional>
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <system_error>
@@ -12,6 +12,14 @@ namespace xtils {
 Json parse_value(std::istream& in, int depth = 0);
 void dump_value(const Json& json, std::string& out, int depth, int indent);
 void dump_string(const std::string& str, std::string& out);
+std::string to_string_trimmed(double value, int precision = 6) {
+  std::ostringstream out;
+  out << std::fixed << std::setprecision(precision) << value;
+  std::string s = out.str();
+  s.erase(s.find_last_not_of('0') + 1, std::string::npos);
+  if (!s.empty() && s.back() == '.') s.pop_back();
+  return s;
+}
 
 // --- Helper functions for parsing ---
 
@@ -697,7 +705,7 @@ void dump_value(const Json& json, std::string& out, int depth, int indent) {
   } else if (json.is_integer()) {
     out.append(std::to_string(json.as_integer()));
   } else if (json.is_float()) {
-    out.append(std::to_string(json.as_float()));
+    out.append(to_string_trimmed(json.as_float()));
   } else if (json.is_string()) {
     dump_string(json.as_string(), out);
   } else if (json.is_array()) {
