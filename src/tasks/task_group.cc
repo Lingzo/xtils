@@ -1,7 +1,6 @@
 #include "xtils/tasks/task_group.h"
 
 #include <exception>
-#include <future>
 #include <memory>
 #include <string>
 

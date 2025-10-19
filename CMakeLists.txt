@@ -2,9 +2,6 @@ cmake_minimum_required(VERSION 3.10)
 
 project(xtils)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
-
 option(INSPECT_DISABLE "Disable inspect module" OFF)
 option(BUILD_TESTS "Build tests" OFF)
 option(BUILD_EXAMPLES "Build examples" OFF)
@@ -18,6 +15,8 @@ target_include_directories(xtils PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+
+target_compile_features(xtils PUBLIC cxx_std_17)
 
 if(INSPECT_DISABLE)
     target_compile_definitions(xtils PUBLIC -DINSPECT_DISABLE=1)

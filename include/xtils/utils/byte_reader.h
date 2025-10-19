@@ -44,9 +44,9 @@ class ByteReader {
   const uint8_t* buffer_;
   size_t size_;
   size_t position_;
-  bool is_little_endian_;
+  const bool is_little_endian_;
 
-  template<typename T>
+  template <typename T>
   bool ReadValue(T& value);
 };
 
