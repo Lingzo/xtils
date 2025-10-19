@@ -297,7 +297,7 @@ void Logger::write_log_sync(const char* tag, const source_loc& loc,
   impl_->write_log_sync(tag, loc, level, message);
 }
 void Logger::write_raw(const std::string& message) {
-  impl_->write_raw(message);
+  if (impl_) impl_->write_raw(message);
 }
 
 void Logger::addSink(std::unique_ptr<Sink> s) { impl_->addSink(std::move(s)); }

@@ -1,6 +1,6 @@
 #include "xtils/utils/json.h"
 
-#include <iomanip>
+#include <functional>
 #include <sstream>
 #include <stdexcept>
 #include <system_error>
@@ -10,6 +10,8 @@ namespace xtils {
 
 // Forward declaration for recursive parsing
 Json parse_value(std::istream& in, int depth = 0);
+void dump_value(const Json& json, std::string& out, int depth, int indent);
+void dump_string(const std::string& str, std::string& out);
 
 // --- Helper functions for parsing ---
 
@@ -647,77 +649,102 @@ bool Json::empty() const {
   return is_null();
 }
 
-std::string Json::dump(int indent) const {
-  std::ostringstream out;
-  if (is_null())
-    out << "null";
-  else if (is_bool())
-    out << (as_bool() ? "true" : "false");
-  else if (is_integer())
-    out << as_integer();
-  else if (is_float())
-    out << as_float();
-  else if (is_string()) {
-    out << "\"";
-    // Escape special characters
-    const std::string& str = as_string();
-    for (size_t i = 0; i < str.length(); ++i) {
-      unsigned char c = str[i];
-      switch (c) {
-        case '"':
-          out << "\\\"";
-          break;
-        case '\\':
-          out << "\\\\";
-          break;
-        case '\n':
-          out << "\\n";
-          break;
-        case '\r':
-          out << "\\r";
-          break;
-        case '\t':
-          out << "\\t";
-          break;
-        case '\b':
-          out << "\\b";
-          break;
-        case '\f':
-          out << "\\f";
-          break;
-        default:
-          if (c < 0x20) {
-            // Control characters
-            out << "\\u" << std::hex << std::setfill('0') << std::setw(4)
-                << (int)c;
-          } else {
-            // Regular ASCII and UTF-8 characters (including high bytes)
-            out << c;
-          }
-          break;
-      }
+void dump_string(const std::string& str, std::string& out) {
+  out.push_back('"');
+  for (unsigned char c : str) {
+    switch (c) {
+      case '"':
+        out.append("\\\"");
+        break;
+      case '\\':
+        out.append("\\\\");
+        break;
+      case '\n':
+        out.append("\\n");
+        break;
+      case '\r':
+        out.append("\\r");
+        break;
+      case '\t':
+        out.append("\\t");
+        break;
+      case '\b':
+        out.append("\\b");
+        break;
+      case '\f':
+        out.append("\\f");
+        break;
+      default:
+        if (c < 0x20) {
+          char buf[7];
+          snprintf(buf, sizeof(buf), "\\u%04x", c);
+          out.append(buf);
+        } else {
+          out.push_back(c);
+        }
+        break;
     }
-    out << "\"";
-  } else if (is_array()) {
-    out << "[";
-    const auto& arr = as_array();
-    for (size_t i = 0; i < arr.size(); ++i) {
-      if (i > 0) out << ", ";
-      out << arr[i].dump(indent);
-    }
-    out << "]";
-  } else if (is_object()) {
-    out << "{";
-    const auto& obj = as_object();
-    bool first = true;
-    for (const auto& [k, v] : obj) {
-      if (!first) out << ", ";
-      out << "\"" << k << "\": " << v.dump(indent);
-      first = false;
-    }
-    out << "}";
   }
-  return out.str();
+  out.push_back('"');
+}
+
+void dump_value(const Json& json, std::string& out, int depth, int indent) {
+  std::string indent_str(indent * depth, ' ');
+  if (json.is_null()) {
+    out.append("null");
+  } else if (json.is_bool()) {
+    out.append(json.as_bool() ? "true" : "false");
+  } else if (json.is_integer()) {
+    out.append(std::to_string(json.as_integer()));
+  } else if (json.is_float()) {
+    out.append(std::to_string(json.as_float()));
+  } else if (json.is_string()) {
+    dump_string(json.as_string(), out);
+  } else if (json.is_array()) {
+    out.append("[");
+    const auto& arr = json.as_array();
+    if (!arr.empty()) {
+      out.append("\n");
+      bool first = true;
+      for (const auto& val : arr) {
+        if (!first) {
+          out.append(",\n");
+        }
+        out.append(indent_str);
+        dump_value(val, out, depth + 1, indent);
+        first = false;
+      }
+      out.append("\n");
+      out.append(indent_str.substr(0, indent_str.size() - indent));
+    }
+    out.append("]");
+  } else if (json.is_object()) {
+    const auto& obj = json.as_object();
+    out.append("{");
+    if (!obj.empty()) {
+      out.append("\n");
+      bool first = true;
+      for (const auto& [k, v] : obj) {
+        if (!first) {
+          out.append(",\n");
+        }
+        out.append(indent_str);
+        dump_string(k, out);
+        out.append(": ");
+        dump_value(v, out, depth + 1, indent);
+        first = false;
+      }
+      out.append("\n");
+      out.append(indent_str.substr(0, indent_str.size() - indent));
+    }
+    out.append("}");
+  }
+}
+
+std::string Json::dump(int indent) const {
+  std::string out;
+  dump_value(*this, out, 1, indent);
+  return out;
 }
 
 std::optional<Json> Json::parse(const std::string& text) {

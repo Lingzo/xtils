@@ -28,7 +28,7 @@ Config& Config::define(const std::string& name, const std::string& description,
 }
 
 bool Config::parse_args(int argc, const char** argv, bool allow_exit) {
-  return parse_args(std::vector<std::string>(argv, argv + argc));
+  return parse_args(std::vector<std::string>(argv, argv + argc), allow_exit);
 }
 
 bool Config::parse_args(const std::vector<std::string>& args, bool allow_exit) {
@@ -64,11 +64,11 @@ bool Config::parse_args(const std::vector<std::string>& args, bool allow_exit) {
     // Skip help flags
     if ((arg == "-h" || arg == "--help") && allow_exit) {
       std::cout << help() << std::endl;
-      exit(0);
+      _exit(0);
     }
     if (arg == "--dump" && allow_exit) {
       print();
-      exit(0);
+      _exit(0);
     }
 
     // Skip config-file argument as it's already processed
