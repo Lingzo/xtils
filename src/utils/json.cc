@@ -528,6 +528,43 @@ const Json& Json::operator[](size_t i) const {
   return arr[i];
 }
 
+// Push back method for arrays
+Json& Json::push_back(const Json& value) {
+  if (!is_array()) {
+    destroy_current_data();  // Clean up old data if type changes
+    type_ = JsonType::ARRAY;
+    data_.array_val = new array_t{};
+  }
+  data_.array_val->push_back(value);
+  return *this;
+}
+
+void Json::clear() noexcept {
+  destroy_current_data();
+  type_ = JsonType::NUL;
+  data_.null_val = nullptr;
+}
+
+void Json::erase(const std::string& key) {
+  if (!is_object()) {
+    throw std::runtime_error("Json value is not an object");
+  }
+  data_.object_val->erase(key);
+}
+
+void Json::erase(size_t index) {
+  if (!is_array()) {
+    throw std::runtime_error("Json value is not an array");
+  }
+  auto& arr = *data_.array_val;
+  if (index >= arr.size()) {
+    throw std::runtime_error(
+        "Array index " + std::to_string(index) +
+        " out of bounds (size: " + std::to_string(arr.size()) + ")");
+  }
+  arr.erase(arr.begin() + index);
+}
+
 // Safe optional access methods (key)
 std::optional<Json> Json::get(const std::string& key) const {
   if (!is_object()) return std::nullopt;
@@ -805,4 +842,5 @@ Json Json::parse(const std::string& text, std::error_code& ec) {
   }
 }
 
+bool Json::contains(const std::string& key) const { return has_key(key); }
 }  // namespace xtils

@@ -107,6 +107,32 @@ class Json {
     return *data_.object_val;
   }
 
+  template <typename T>
+  T as() const {
+    if constexpr (std::is_same_v<T, boolean_t>) {
+      return as_bool();
+    } else if constexpr (std::is_same_v<T, integer_t> ||
+                         std::is_integral_v<T>) {
+      return as_integer();
+    } else if constexpr (std::is_same_v<T, float_t> ||
+                         std::is_floating_point_v<T>) {
+      return as_float();
+    } else if constexpr (std::is_same_v<T, string_t>) {
+      return as_string();
+    } else if constexpr (std::is_same_v<T, array_t>) {
+      return as_array();
+    } else if constexpr (std::is_same_v<T, object_t>) {
+      return as_object();
+    } else {
+      static_assert(
+          std::is_same_v<T, boolean_t> || std::is_same_v<T, integer_t> ||
+              std::is_same_v<T, float_t> || std::is_same_v<T, double> ||
+              std::is_same_v<T, string_t> || std::is_same_v<T, array_t> ||
+              std::is_same_v<T, object_t>,
+          "Unsupported type for Json::as()");
+    }
+  }
+
   // Non-const operator[] - creates key/index if not exists
   Json& operator[](const std::string& key);
 
@@ -119,13 +145,24 @@ class Json {
   // Const operator[] - throws if index out of bounds
   const Json& operator[](size_t i) const;
 
+  Json& push_back(const Json& value);
+
+  void clear() noexcept;
+  void erase(const std::string& key);
+  void erase(size_t index);
+
   // Safe optional access methods
   std::optional<Json> get(const std::string& key) const;
   std::optional<Json> get(size_t index) const;
+  template <typename T>
+  T get(const std::string& key) const {
+    return get(key).value().template as<T>();
+  }
 
   // Key/index existence checks
   bool has_key(const std::string& key) const;
   bool has_index(size_t index) const;
+  bool contains(const std::string& key) const;
 
   // Safe typed access methods
   std::optional<boolean_t> get_bool(const std::string& key) const;
