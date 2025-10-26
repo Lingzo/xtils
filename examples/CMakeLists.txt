@@ -29,6 +29,7 @@ add_example(udp_multicast_example udp_multicast_example.cc)
 add_example(cron_scheduler_example cron_scheduler_example.cc)
 add_example(websocket_client_example websocket_client_example.cc)
 add_example(common common.cc)
+add_example(bt_example bt_example.cc)
 
 # Optional: Create a custom target to build all examples
 add_custom_target(examples
@@ -44,4 +45,5 @@ add_custom_target(examples
         cron_scheduler_example
         websocket_client_example
         common
+        bt_example
 )
