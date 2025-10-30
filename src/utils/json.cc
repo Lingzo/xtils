@@ -788,6 +788,7 @@ void dump_value(const Json& json, std::string& out, int depth, int indent) {
 
 std::string Json::dump(int indent) const {
   std::string out;
+  out.reserve(1024);  // Pre-allocate some space
   dump_value(*this, out, 1, indent);
   return out;
 }

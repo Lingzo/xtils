@@ -5,6 +5,7 @@ project(xtils)
 option(INSPECT_DISABLE "Disable inspect module" OFF)
 option(BUILD_TESTS "Build tests" OFF)
 option(BUILD_EXAMPLES "Build examples" OFF)
+option(BUILD_WITH_SANITIZERS "Build with sanitizers" OFF)
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/xtils-autogen.cmake)
 
@@ -34,6 +35,11 @@ target_link_options(xtils PUBLIC
     $<$<CONFIG:Debug>:-rdynamic -Wl,--as-needed -Wl,--gc-sections>
     $<$<CONFIG:Release>:-rdynamic -Wl,--as-needed -Wl,--gc-sections>
     $<$<CONFIG:RelWithDebInfo>:-rdynamic -Wl,--as-needed -Wl,--gc-sections>)
+
+if(BUILD_WITH_SANITIZERS)
+    target_compile_options(xtils PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(xtils PUBLIC -fsanitize=address,undefined)
+endif()
 
 if(BUILD_TESTS)
     enable_testing()

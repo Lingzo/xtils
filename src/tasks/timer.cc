@@ -100,6 +100,9 @@ void BaseTimer<TimePoint, TimerInfoType>::ExecuteTimer(TimerId timer_id) {
       return;  // Timer was cancelled
     }
     timer_info = it->second;
+    if (timer_info->type == TimerType::kOneShot) {  // remove one-shot timers
+      active_timers_.erase(it);
+    }
   }
 
   // Execute the callback
@@ -114,10 +117,6 @@ void BaseTimer<TimePoint, TimerInfoType>::ExecuteTimer(TimerId timer_id) {
   // Handle repeating timers
   if (timer_info->type == TimerType::kRepeating && !timer_info->cancelled) {
     ScheduleRepeatingTimer(timer_info);
-  } else {
-    // Remove one-shot timer
-    std::lock_guard<std::mutex> lock(timers_mutex_);
-    active_timers_.erase(timer_id);
   }
 }
 
