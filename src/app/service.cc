@@ -5,8 +5,7 @@
 #include "xtils/app/app.h"
 #include "xtils/system/signal_handler.h"
 
-__attribute__((weak)) void app_version(uint32_t& major, uint32_t& minor,
-                                       uint32_t& patch) {
+void app_version(uint32_t& major, uint32_t& minor, uint32_t& patch) {
   major = 1;
   minor = 1;
   patch = 0;

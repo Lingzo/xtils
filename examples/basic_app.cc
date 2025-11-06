@@ -35,10 +35,10 @@ class SimpleService : public xtils::Service {
             LogI("Run in back");
           },
           []() { LogI("Run in main"); });
-    ctx->connect(1, [this](const xtils::Event& e) {
-      LogI("On Event %d", e.id);
+    enum EventIds : xtils::EventId { EVENT_TEST = 1 };
+    ctx->connect(EVENT_TEST, [this](const xtils::EventId& e) {
+      LogI("On Event %d", e);
       std::this_thread::sleep_for(std::chrono::seconds(5));
-      ctx->PostAsyncTask([this, e]() { ctx->emit(e); });
     });
 
     ctx->PostAsyncTask([this] {
@@ -49,6 +49,7 @@ class SimpleService : public xtils::Service {
 
     using namespace xtils;
     for (int i = 0; i <= 10; i++) {
+      ctx->emit(EVENT_TEST);
       auto t1 = steady::GetCurrentMs();
       int ms = 1000 * i;
       ctx->delay(ms, [t1, ms] {
@@ -66,13 +67,6 @@ class SimpleService : public xtils::Service {
 
   void deinit() override { LogI("Deinit"); }
 };
-
-// call by xtils
-void app_version(uint32_t& major, uint32_t& minor, uint32_t& patch) {
-  major = 0;
-  minor = 1;
-  patch = 2;
-}
 
 // call by xtils
 void app_main(xtils::App& ctx, const std::vector<std::string>& args) {

@@ -262,10 +262,6 @@ void App::PostAsyncTask(Task task, Task main) {
   });
 }
 
-void App::emit(const Event &e) { em_->emit(e); }
-
-void App::connect(EventId id, OnEvent cb) { em_->emit(id, cb); }
-
 void App::every(uint32_t ms, TimerCallback cb) {
   timer_->SetRepeatingTimer(ms, cb);
 }

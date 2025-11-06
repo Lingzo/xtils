@@ -44,8 +44,20 @@ class App {
   void delay(uint32_t ms, TimerCallback cb);
 
   // event
-  void emit(const Event& e);
-  void connect(EventId id, OnEvent cb);
+  template <typename Event>
+  void emit(const Event& e) {
+    em_->emit<Event>(e);
+  }
+
+  template <typename Event, typename TypedCallback>
+  void connect(Event id, TypedCallback cb) {
+    em_->connect<Event>(id, cb);
+  }
+
+  template <typename Event, typename TypedCallback>
+  void connect(TypedCallback cb) {
+    em_->connect<Event>(cb);
+  }
 
   const Config& conf() { return config_; }
 
