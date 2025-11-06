@@ -2,6 +2,8 @@
 #include <xtils/logging/logger.h>
 #include <xtils/utils/exception.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -74,6 +76,58 @@ Node::Ptr BtFactory::buildNode(const Json& j) {
       std::reinterpret_pointer_cast<Decorator>(node)->setChild(
           buildNode(j["child"]));
     }
+
+    if (auto ports = j.get_array("ports")) {
+      const auto& node_ports = factory->second.ports;
+      for (auto& p : ports.value()) {
+        std::string name = p["name"].as_string();
+        auto it = std::find_if(node_ports.begin(), node_ports.end(),
+                               [&name](auto& e) { return e.name == name; });
+        if (it != node_ports.end()) {
+          if (p["value"].is_number()) {
+            if (it->type_name == xtils::type_name<int>()) {
+              node->data_.set<int>(name, p["value"].as_integer());
+            } else if (it->type_name == xtils::type_name<int64_t>()) {
+              node->data_.set<int64_t>(name, p["value"].as_integer());
+            } else if (it->type_name == xtils::type_name<uint64_t>()) {
+              node->data_.set<uint64_t>(name, p["value"].as_integer());
+            } else if (it->type_name == xtils::type_name<uint32_t>()) {
+              node->data_.set<uint32_t>(name, p["value"].as_integer());
+            } else if (it->type_name == xtils::type_name<uint16_t>()) {
+              node->data_.set<uint16_t>(name, p["value"].as_integer());
+            } else if (it->type_name == xtils::type_name<uint8_t>()) {
+              node->data_.set<uint8_t>(name, p["value"].as_integer());
+            } else if (it->type_name == xtils::type_name<int32_t>()) {
+              node->data_.set<int32_t>(name, p["value"].as_integer());
+            } else if (it->type_name == xtils::type_name<int16_t>()) {
+              node->data_.set<int16_t>(name, p["value"].as_integer());
+            } else if (it->type_name == xtils::type_name<int8_t>()) {
+              node->data_.set<int8_t>(name, p["value"].as_integer());
+            } else if (it->type_name == xtils::type_name<float>()) {
+              node->data_.set<float>(name, p["value"].as_float());
+            } else if (it->type_name == xtils::type_name<double>()) {
+              node->data_.set<double>(name, p["value"].as_float());
+            } else {
+              LogW("Unsupported type: %s", it->type_name.c_str());
+            }
+          } else if (p["value"].is_bool()) {
+            node->data_.set(name, p["value"].as_bool());
+          } else if (p["value"].is_string()) {
+            std::string value = p["value"].as_string();
+            if (value.empty() && value[0] == '&') {
+              // support black board
+              LogTodo();
+            } else {
+              node->data_.set(name, p["value"].as_string());
+            }
+          } else {
+            LogW("Unsupported prot: %s", p.dump(0).c_str());
+          }
+        } else {
+          LogW("Unsupported prot: %s", p.dump(0).c_str());
+        }
+      }
+    }
     return node;
   } else {
     throw xtils::runtime_error("Unknown node type: " + id);
@@ -95,6 +149,14 @@ std::string BtFactory::dump() const {
     Json jsObj;
     jsObj["id"] = id;
     jsObj["type"] = static_cast<int>(factory.type);
+    jsObj["ports"];
+    for (auto& p : factory.ports) {
+      Json port;
+      port["name"] = p.name;
+      port["mode"] = p.mode;
+      port["type_name"] = p.type_name;
+      jsObj["ports"].push_back(port);
+    }
     arr.push_back(jsObj);
   }
   Json json;
@@ -112,9 +174,11 @@ void ActionNode::reset() { Node::reset(); }
 
 // composite node
 Composite::Composite(const std::string& name) : Node(name, Type::Composite) {}
+
 void Composite::reset() {
   for (auto& c : children) c->reset();
   Node::reset();
+  current = 0;
 }
 
 Status Node::tick() {
@@ -138,7 +202,8 @@ void Node::reset() {
 
 Delay::Delay(const std::string& name) : Decorator(name) {}
 Status Delay::OnStart() {
-  delay_ = 100;
+  delay_ = getInput<int>("delay").value();
+
   return Status::Running;
 }
 Status Delay::OnTick() {

@@ -17,6 +17,10 @@ const std::string example_tree = R"(
               {
                 "id": "Delay",
                 "type": 2,
+                "ports": [{
+                  "name": "delay",
+                  "value": 10
+                }],
                 "child": {
                   "id": "MySimpleAction",
                   "type": 1
@@ -43,7 +47,7 @@ const std::string example_tree = R"(
 
 class BtService : public xtils::Service {
  public:
-  BtService() : Service("Behavior Tree Service") {
+  BtService() : Service("behavior_tree") {
     factory.RegisterSimpleAction(
         []() {
           LogI("Simple action executed");
