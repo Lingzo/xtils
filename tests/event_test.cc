@@ -33,20 +33,20 @@ struct CustomData {
 class EventTestFixture {
  public:
   EventTestFixture() : tg_(std::make_unique<TaskGroup>(2)) {}
-  std::unique_ptr<TaskGroup> tg_;
+  std::shared_ptr<TaskGroup> tg_;
   void waitForTasks(int ms = 100) {
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
   }
 };
 
 TEST_CASE_FIXTURE(EventTestFixture, "EventManager: construction") {
-  EventManager em(tg_.get());
+  EventManager em(tg_);
   CHECK(true);
 }
 
 TEST_CASE_FIXTURE(EventTestFixture,
                   "Enum events: connect and emit (explicit template)") {
-  EventManager em(tg_.get());
+  EventManager em(tg_);
 
   std::atomic<bool> called{false};
   std::atomic<int> received{0};
@@ -77,7 +77,7 @@ TEST_CASE_FIXTURE(EventTestFixture,
 
 TEST_CASE_FIXTURE(EventTestFixture,
                   "Typed events: connect and emit (explicit template)") {
-  EventManager em(tg_.get());
+  EventManager em(tg_);
 
   SUBCASE("string payload") {
     std::atomic<bool> got{false};
@@ -117,7 +117,7 @@ TEST_CASE_FIXTURE(EventTestFixture,
 TEST_CASE_FIXTURE(
     EventTestFixture,
     "Multiple callbacks and multiple emits (explicit templates)") {
-  EventManager em(tg_.get());
+  EventManager em(tg_);
 
   std::atomic<int> c1{0}, c2{0};
 
@@ -141,7 +141,7 @@ TEST_CASE_FIXTURE(
 TEST_CASE_FIXTURE(
     EventTestFixture,
     "Thread-safety: concurrent emits (enum, explicit templates)") {
-  EventManager em(tg_.get());
+  EventManager em(tg_);
   std::atomic<int> total{0};
 
   em.connect<TestEventIds>(EVENT_INT_DATA, [&](const TestEventIds& id) {
@@ -173,11 +173,11 @@ TEST_CASE_FIXTURE(
 TEST_CASE_FIXTURE(
     EventTestFixture,
     "EventManager lifecycle with TaskGroup (explicit templates)") {
-  auto local_tg = std::make_unique<TaskGroup>(1);
+  auto local_tg = std::make_shared<TaskGroup>(1);
   std::atomic<bool> executed{false};
 
   {
-    EventManager em(local_tg.get());
+    EventManager em(local_tg);
     em.connect<std::string>([&](const std::string& s) {
       (void)s;
       executed = true;

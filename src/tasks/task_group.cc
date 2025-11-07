@@ -55,10 +55,8 @@ TaskGroup::TaskGroup(int size, std::shared_ptr<TaskRunner> runner)
 }
 
 TaskGroup::~TaskGroup() {
-  quit_ = true;
-  tasks_.quit();
-  for (auto& t : threads_) {
-    if (t.joinable()) t.join();
+  if (!quit_) {
+    stop();
   }
 }
 
@@ -81,4 +79,11 @@ std::shared_ptr<TaskRunner> TaskGroup::main_runner() { return main_runner_; }
 
 bool TaskGroup::is_busy() { return tasks_.size() > threads_.size() * 2; }
 int TaskGroup::size() { return threads_.size(); }
+void TaskGroup::stop() {
+  quit_ = true;
+  tasks_.quit();
+  for (auto& t : threads_) {
+    if (t.joinable()) t.join();
+  }
+}
 }  // namespace xtils

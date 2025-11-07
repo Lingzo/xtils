@@ -89,7 +89,8 @@ void App::init(const std::vector<std::string> &args) {
   int threads_size = conf().get_int("xtils.threads");
   CHECK(threads_size > 1);
   tg_ = std::make_unique<TaskGroup>(threads_size);
-  em_ = std::make_unique<EventManager>(tg_.get());
+  em_ =
+      std::make_unique<EventManager>(TaskGroup::Sequential(tg_->main_runner()));
   timer_ = std::make_unique<SteadyTimer>(tg_.get());
   initialized_ = true;
 }
@@ -236,6 +237,8 @@ void App::deinit() {
     Inspect::Get().Stop();
   }
 #endif
+  tg_->stop();  // stop task group first
+  em_->stop();  // stop event manager
 
   for (auto &p : service_) {
     p->deinit();
@@ -291,14 +294,14 @@ void App::print_banner() {
   logger::default_logger()->write_raw(banner.c_str());
 }
 
-void App::registor(std::list<std::shared_ptr<Service>> services) {
+void App::registor(std::list<std::shared_ptr<IService>> services) {
   CHECK(!running_);
   for (auto &p : services) {
     registor(p);
   }
 }
 
-void App::registor(std::shared_ptr<Service> p) {
+void App::registor(std::shared_ptr<IService> p) {
   CHECK(!running_);
   service_.push_back(p);
 }

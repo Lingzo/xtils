@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <future>
 #include <list>
@@ -14,15 +15,15 @@
 namespace xtils {
 class TaskGroup {
  public:
-  static std::shared_ptr<TaskGroup> Sequential(
+  static std::unique_ptr<TaskGroup> Sequential(
       std::shared_ptr<TaskRunner> runner = nullptr) {
-    return std::make_shared<TaskGroup>(1, runner);
+    return std::make_unique<TaskGroup>(1, runner);
   }
 
-  static std::shared_ptr<TaskGroup> Parallel(
+  static std::unique_ptr<TaskGroup> Parallel(
       int size = std::thread::hardware_concurrency(),
       std::shared_ptr<TaskRunner> runner = nullptr) {
-    return std::make_shared<TaskGroup>(0, runner);
+    return std::make_unique<TaskGroup>(0, runner);
   }
 
  public:
@@ -60,6 +61,8 @@ class TaskGroup {
 
   bool is_busy();
   int size();
+  void stop();
+  bool stop_wait_all(std::chrono::seconds timeout = std::chrono::seconds(5));
 
   std::shared_ptr<TaskRunner> main_runner();
 

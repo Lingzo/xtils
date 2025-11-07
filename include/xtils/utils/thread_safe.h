@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <mutex>
@@ -13,10 +14,18 @@ class ThreadSafe {
   ThreadSafe() = default;
   ~ThreadSafe() { quit(); }
 
-  bool pop_wait(value_type& e) {
+  bool pop_wait(value_type& e,
+                std::chrono::seconds timeout = std::chrono::seconds::max()) {
     std::unique_lock<std::mutex> lock(mtx_);
-    cv_.wait(lock, [&]() { return !data_.empty() | quit_; });
-    if (quit_) return false;
+    if (timeout != std::chrono::seconds::max()) {
+      auto ret =
+          cv_.wait_for(lock, timeout, [&]() { return !data_.empty() | quit_; });
+      if (quit_ || !ret) return false;
+
+    } else {
+      cv_.wait(lock, [&]() { return !data_.empty() | quit_; });
+      if (quit_) return false;
+    }
     e = data_.front();
     data_.pop_front();
     return true;

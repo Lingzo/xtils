@@ -1,25 +1,44 @@
+#include <string>
 #include <vector>
 
 #include "xtils/app/app.h"
 #include "xtils/config/config.h"
+#include "xtils/utils/weak_ptr.h"
 
 void app_version(uint32_t& major, uint32_t& minor, uint32_t& patch);
 // call by internal main function
 void app_main(xtils::App& ctx, const std::vector<std::string>& args);
 
 namespace xtils {
-
-class Service {
+class IService {
  public:
-  explicit Service(const char* n) : name(n) {}
+  explicit IService(const char* n) : name(n) {}
   virtual void init() = 0;
   virtual void deinit() = 0;
+  virtual ~IService() = default;
 
  protected:
+  std::string name;
   friend class App;
   xtils::App* ctx;
-  std::string name;
   Config config;
+};
+
+template <typename ServiceType>
+class Service : public IService {
+ public:
+  explicit Service(const char* n) : IService(n), weak_factory_(this) {}
+  virtual void init() = 0;
+  virtual void deinit() = 0;
+  auto GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
+
+  template <typename T>
+  void emit(const T& e) {
+    ctx->emit<T>(e);
+  }
+
+ protected:
+  WeakPtrFactory<Service<ServiceType>> weak_factory_;
 };
 
 /**

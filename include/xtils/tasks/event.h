@@ -19,6 +19,8 @@
 #include <functional>
 #include <list>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <typeindex>
 #include <unordered_map>
 
@@ -42,7 +44,8 @@ using OnEvent = std::function<void(const void*)>;
 
 class EventManager {
  public:
-  explicit EventManager(TaskGroup* tg) : tg_(tg) {}
+  explicit EventManager(std::shared_ptr<TaskGroup> tg) : tg_(tg) {}
+  ~EventManager() {}
 
   template <typename EventT>
   using TypedCallback = std::function<void(const EventT&)>;
@@ -65,7 +68,9 @@ class EventManager {
 
   template <typename T, std::enable_if_t<!std::is_enum_v<T>, int> = 0>
   void emit(const T& e) {
+    if (stop_) return;
     std::type_index type = std::type_index(typeid(T));
+    std::lock_guard<std::mutex> lock(map_mutex_);
     auto it = maps_.find(type);
     if (it != maps_.end()) {
       dispatch(it->second, e);
@@ -74,11 +79,18 @@ class EventManager {
 
   template <typename T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
   void emit(const T& e) {
+    if (stop_) return;
     std::uint32_t uid = static_cast<std::uint32_t>(e);
+    std::lock_guard<std::mutex> lock(enum_map_mutex_);
     auto it = enum_maps_.find(uid);
     if (it != enum_maps_.end()) {
       dispatch(it->second, e);
     }
+  }
+
+  void stop() {
+    stop_ = true;
+    tg_->stop();
   }
 
  private:
@@ -86,18 +98,17 @@ class EventManager {
   template <typename T>
   // copy cbs for threads safe
   void dispatch(Callbacks cbs, const T& e) {
-    tg_->PostAsyncTask([e, cbs] {
-      for (auto& cb : cbs) {
-        cb(&e);
-      }
-    });
+    for (auto& cb : cbs) {
+      tg_->PostAsyncTask([e, cb] { cb(&e); });
+    }
   }
 
  private:
-  std::atomic_int idx{0};
-  int pool_size;
+  std::atomic_bool stop_{false};
+  std::mutex map_mutex_;
   std::unordered_map<std::type_index, Callbacks> maps_;
+  std::mutex enum_map_mutex_;
   std::map<std::uint32_t, Callbacks> enum_maps_;
-  TaskGroup* tg_;  // no own
+  std::shared_ptr<TaskGroup> tg_;
 };
 }  // namespace xtils

@@ -12,9 +12,9 @@
 #include "xtils/tasks/event.h"
 #include "xtils/utils/time_utils.h"
 
-class SimpleService : public xtils::Service {
+class SimpleService : public xtils::Service<SimpleService> {
  public:
-  SimpleService() : xtils::Service("simple") {
+  SimpleService() : xtils::Service<SimpleService>("simple") {
     config.define("params", "params", 0);
     config.define("p.level.1", "p.level.1", false);
     config.define("p.level.3", "p.level.3", "string");
@@ -35,12 +35,20 @@ class SimpleService : public xtils::Service {
             LogI("Run in back");
           },
           []() { LogI("Run in main"); });
-    enum EventIds : xtils::EventId { EVENT_TEST = 1 };
-    ctx->connect(EVENT_TEST, [this](const xtils::EventId& e) {
+    enum EventIds : xtils::EventId { EVENT_TEST = 1, EVENT_TEST_2 = 2 };
+    auto weak = GetWeakPtr();
+    ctx->connect(EVENT_TEST, [weak](const xtils::EventId& e) {
       LogI("On Event %d", e);
       std::this_thread::sleep_for(std::chrono::seconds(5));
+      if (weak) {
+        weak->emit(EVENT_TEST_2);
+      }
     });
 
+    ctx->connect(EVENT_TEST_2, [this](const xtils::EventId& e) {
+      LogI("On Event 2 %d", e);
+      ctx->emit(EVENT_TEST);
+    });
     ctx->PostAsyncTask([this] {
       TRACE_SCOPE("Task");
       fib(10);

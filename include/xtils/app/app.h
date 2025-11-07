@@ -16,7 +16,7 @@
 namespace xtils {
 using Task = std::function<void()>;
 
-class Service;
+class IService;
 class App {
  private:
   App();
@@ -25,8 +25,8 @@ class App {
   ~App();
   static App* ins();
 
-  void registor(std::list<std::shared_ptr<Service>> services);
-  void registor(std::shared_ptr<Service> p);
+  void registor(std::list<std::shared_ptr<IService>> services);
+  void registor(std::shared_ptr<IService> p);
 
  public:
   // until shutdown
@@ -80,7 +80,7 @@ class App {
   std::unique_ptr<EventManager> em_;
   std::shared_ptr<TaskGroup> tg_;
   std::unique_ptr<SteadyTimer> timer_;
-  std::list<std::shared_ptr<Service>> service_;
+  std::list<std::shared_ptr<IService>> service_;
   bool running_ = false;
   bool initialized_ = false;
   std::vector<std::string> args_;
