@@ -69,12 +69,12 @@ Node::Ptr BtFactory::buildNode(const Json& j) {
       for (auto& c : j["children"].as_array())
         std::reinterpret_pointer_cast<Composite>(node)->addChild(buildNode(c));
     } else if (factory->second.type == Type::Decorator) {
-      if (!j.has_key("child")) {
+      if (!j.has_key("children")) {
         throw xtils::runtime_error(
             "Decorator node must have exactly one child");
       }
       std::reinterpret_pointer_cast<Decorator>(node)->setChild(
-          buildNode(j["child"]));
+          buildNode(j["children"]));
     }
 
     if (auto ports = j.get_array("ports")) {
@@ -271,11 +271,28 @@ std::string BtTree::dump_node(const Node& node) {
 
 Json BtTree::dump_tree_node(const Node& node) {
   Json json;
-  json["name"] = node.name_;
+  json["id"] = node.name_;
   json["type"] = static_cast<int>(node.type_);
-  json["status"] = static_cast<int>(node.status_);
-  for (const auto&p : node.get_ports()) {
-  
+  //  json["status"] = static_cast<int>(node.status_);
+  for (const auto& p : node.data_.map_) {
+    Json port;
+    auto& e = p.second;
+    auto& n = p.first;
+    port["name"] = n;
+    if (e.type_name == xtils::type_name<int>()) {
+      port["value"] = node.data_.get<int>(n).value();
+    } else if (e.type_name == xtils::type_name<std::string>()) {
+      port["value"] = node.data_.get<std::string>(n).value();
+    } else if (e.type_name == xtils::type_name<bool>()) {
+      port["value"] = node.data_.get<bool>(n).value();
+    } else if (e.type_name == xtils::type_name<double>()) {
+      port["value"] = node.data_.get<double>(n).value();
+    } else if (e.type_name == xtils::type_name<float>()) {
+      port["value"] = node.data_.get<float>(n).value();
+    } else {
+      port["value"] = "unsupported type";
+    }
+    json["ports"].push_back(port);
   }
   for (const auto& n : node.children) {
     json["children"].push_back(dump_tree_node(*n));

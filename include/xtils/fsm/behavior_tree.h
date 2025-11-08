@@ -13,28 +13,55 @@
 namespace xtils {
 
 using Json = xtils::Json;
+struct AnyData {
+  std::string type_name;
+  std::shared_ptr<void> data;
+  template <typename T>
+  T* get() const {
+    if (type_name != ::xtils::type_name<T>()) {
+      return nullptr;
+    }
+    return static_cast<T*>(data.get());
+  }
+};
+
+template <typename T>
+AnyData make_any_data(const T& t) {
+  AnyData any_data;
+  any_data.type_name = std::string(::xtils::type_name<T>());
+  any_data.data = std::make_shared<T>(t);
+  return any_data;
+}
+
 class AnyMap {
  public:
   template <typename T>
   void set(const std::string& name, const T& t) {
-    map_[name] = t;
+    map_[name] = make_any_data(t);
   }
 
   template <typename T>
-  std::optional<T> get(const std::string& name) {
+  std::optional<T> get(const std::string& name) const {
     auto it = map_.find(name);
     if (it == map_.end()) return std::nullopt;
 
-    if (it->second.type() != typeid(T)) {
-      return std::nullopt;
-    }
-
-    T* result = std::any_cast<T>(&it->second);
+    const T* result = it->second.get<T>();
     return result ? std::optional<T>(*result) : std::nullopt;
   }
 
- private:
-  std::map<std::string, std::any> map_;
+  bool has(const std::string& name) const {
+    return map_.find(name) != map_.end();
+  }
+
+  std::vector<std::string> keys() const {
+    std::vector<std::string> keys;
+    for (const auto& pair : map_) {
+      keys.push_back(pair.first);
+    }
+    return keys;
+  }
+
+  std::map<std::string, AnyData> map_;
 };
 
 struct IPort {
