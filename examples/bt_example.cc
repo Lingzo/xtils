@@ -1,5 +1,6 @@
 #include <xtils/app/service.h>
 #include <xtils/fsm/behavior_tree.h>
+#include <xtils/utils/file_utils.h>
 
 #include <memory>
 
@@ -103,9 +104,22 @@ class BtService : public xtils::Service {
   }
   void init() override {
     LogI("%s", factory.dump().c_str());
+    file_utils::write("./bt_nodes.json", factory.dump());
     // Initialize the behavior tree service
-    auto j = xtils::Json::parse(example_tree);
+    std::string example;
+    file_utils::read("./tree.json", &example);
+    if (example.empty()) {
+      example = example_tree;
+      LogW("Using default example tree");
+    }
+    LogI("\n%s\n", example.c_str());
+    auto j = xtils::Json::parse(example);
+    if (!j.has_value()) {
+      LogE("Failed to parse behavior tree JSON");
+      return;
+    }
     auto tree = factory.buildFromJson(j.value());
+    file_utils::write("./tree.json", tree->dumpTree().dump(2));
     LogI("\n%s", tree->dump().c_str());
     LogI("\n%s", tree->dumpTree().dump(2).c_str());
     auto& blackboard = tree->blackboard();

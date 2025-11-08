@@ -8,35 +8,37 @@
 #include <sstream>
 #include <string>
 
+#include "nodes.h"
+
 namespace xtils {
 
 Status Sequence::OnTick() {
-  while (current < children.size()) {
-    Status s = children[current]->tick();
+  while (current_ < children.size()) {
+    Status s = children[current_]->tick();
     if (s == Status::Running) return Status::Running;
     if (s == Status::Failure) {
-      current = 0;
+      current_ = 0;
       return Status::Failure;
     }
     // success -> move to next child
-    ++current;
+    ++current_;
   }
-  current = 0;
+  current_ = 0;
   return Status::Success;
 }
 
 Status Selector::OnTick() {
-  while (current < children.size()) {
-    Status s = children[current]->tick();
+  while (current_ < children.size()) {
+    Status s = children[current_]->tick();
     if (s == Status::Running) return Status::Running;
     if (s == Status::Success) {
-      current = 0;
+      current_ = 0;
       return Status::Success;
     }
     // failure -> try next child
-    ++current;
+    ++current_;
   }
-  current = 0;
+  current_ = 0;
   return Status::Failure;
 }
 
@@ -56,11 +58,12 @@ Node::Ptr BtFactory::buildNode(const Json& j) {
   if (!j.is_object()) throw xtils::runtime_error("Node JSON must be object");
   std::string id = j.get_string("id").value_or("");
   std::string name = j.get_string("name").value_or("");
-  if (id.empty()) throw xtils::runtime_error("Node must have an id");
+  if (id.empty() && name.empty())
+    throw xtils::runtime_error("Node must have an id or name");
   if (name.empty()) {
     name = id;
   }
-  auto factory = nodes_.find(id);
+  auto factory = nodes_.find(name);
   if (factory != nodes_.end()) {
     auto node = factory->second.create(name);
     if (factory->second.type == Type::Composite) {
@@ -70,12 +73,12 @@ Node::Ptr BtFactory::buildNode(const Json& j) {
       for (auto& c : j["children"].as_array())
         std::reinterpret_pointer_cast<Composite>(node)->addChild(buildNode(c));
     } else if (factory->second.type == Type::Decorator) {
-      if (!j.has_key("children")) {
+      if (!j.has_key("children") || j["children"].as_array().size() != 1) {
         throw xtils::runtime_error(
             "Decorator node must have exactly one child");
       }
       std::reinterpret_pointer_cast<Decorator>(node)->setChild(
-          buildNode(j["children"]));
+          buildNode(j["children"][0]));
     }
 
     if (auto ports = j.get_array("ports")) {
@@ -130,12 +133,22 @@ Node::Ptr BtFactory::buildNode(const Json& j) {
 }
 
 BtFactory::BtFactory() {
+  // composites
   Register<Selector>("Selector");
+  Register<RandomSelector>("RandomSelector");
   Register<Sequence>("Sequence");
-  Register<AlwaysSuccess>("AlwaysSuccess");
-  Register<AlwaysFailure>("AlwaysFailure");
+  Register<Fallback>("Fallback");
+
+  // decorators
   Register<Delay>("Delay");
   Register<Inverter>("Inverter");
+  Register<Retry>("Retry");
+  Register<Repeater>("Repeater");
+
+  // Actions
+  Register<AlwaysSuccess>("AlwaysSuccess");
+  Register<AlwaysFailure>("AlwaysFailure");
+  Register<Wait>("Wait");
 }
 
 std::string BtFactory::dump() const {
@@ -173,7 +186,7 @@ Composite::Composite(const std::string& name) : Node(name, Type::Composite) {}
 void Composite::reset() {
   for (auto& c : children) c->reset();
   Node::reset();
-  current = 0;
+  current_ = 0;
 }
 
 Status Node::tick() {
@@ -273,7 +286,7 @@ std::string BtTree::dump_node(const Node& node) {
 
 Json BtTree::dump_tree_node(const Node& node) {
   Json json;
-  json["id"] = node.name_;
+  json["name"] = node.name_;
   json["type"] = static_cast<int>(node.type_);
   //  json["status"] = static_cast<int>(node.status_);
   for (const auto& p : node.data_) {

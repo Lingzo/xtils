@@ -79,6 +79,7 @@ class AnyMap {
     }
     return keys;
   }
+  void clear() { map_.clear(); }
 
  private:
   std::map<std::string, AnyData> map_;
@@ -126,6 +127,7 @@ class Node {
   Status getStatus() const { return status_; }
 
   static std::vector<IPort> get_ports() { return {}; }
+  static std::string desc() { return ""; }
 
   template <typename T>
   std::optional<T> getInput(const std::string& name) {
@@ -176,7 +178,7 @@ class Composite : public Node {
   void reset() override final;
 
  protected:
-  size_t current = 0;
+  size_t current_ = 0;
 };
 
 class Sequence : public Composite {
