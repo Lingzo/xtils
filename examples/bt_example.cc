@@ -61,6 +61,7 @@ class BtService : public xtils::Service {
     auto j = xtils::Json::parse(example_tree);
     auto tree = factory.buildFromJson(j.value());
     LogI("\n%s", tree->dump().c_str());
+    LogI("\n%s", tree->dumpTree().dump(2).c_str());
     ctx->every(1000, [this, tree]() {
       auto status = tree->tick();
       LogI("%d", status);

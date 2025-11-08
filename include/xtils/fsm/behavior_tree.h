@@ -1,5 +1,6 @@
 #pragma once
 #include <xtils/utils/json.h>
+#include <xtils/utils/type_traits.h>
 
 #include <any>
 #include <atomic>
@@ -21,43 +22,20 @@ class AnyMap {
 
   template <typename T>
   std::optional<T> get(const std::string& name) {
-    try {
-      auto e = map_[name];
-      return std::any_cast<T>(e);
-    } catch (const std::exception& e) {
+    auto it = map_.find(name);
+    if (it == map_.end()) return std::nullopt;
+
+    if (it->second.type() != typeid(T)) {
       return std::nullopt;
     }
+
+    T* result = std::any_cast<T>(&it->second);
+    return result ? std::optional<T>(*result) : std::nullopt;
   }
 
  private:
   std::map<std::string, std::any> map_;
 };
-
-#if defined(__GNUC__) || defined(__clang__)
-#include <cxxabi.h>
-inline std::string demangle(const char* mangled_name) {
-  int status = 0;
-  char* demangled =
-      abi::__cxa_demangle(mangled_name, nullptr, nullptr, &status);
-  std::string result(status == 0 ? demangled : mangled_name);
-  free(demangled);
-  return result;
-}
-#define GET_TYPE_NAME(type) demangle(typeid(type).name())
-#elif defined(_MSC_VER)
-#define GET_TYPE_NAME(type) typeid(type).name()
-#else
-#define GET_TYPE_NAME(type) typeid(type).name()
-#endif
-template <typename T>
-std::string type_name() {
-  return GET_TYPE_NAME(T);
-}
-
-template <typename T>
-std::string type_name(const T&) {
-  return type_name<T>();
-}
 
 struct IPort {
  public:
@@ -72,14 +50,14 @@ template <typename T>
 class InputPort : public IPort {
  public:
   InputPort(const std::string& name)
-      : IPort(name, 0, ::xtils::type_name<T>()) {}
+      : IPort(name, 0, std::string(::xtils::type_name<T>())) {}
 };
 
 template <typename T>
 class OutputPort : public IPort {
  public:
   OutputPort(const std::string& name)
-      : IPort(name, 1, ::xtils::type_name<T>()) {}
+      : IPort(name, 1, std::string(::xtils::type_name<T>())) {}
 };
 
 enum class Status { Success = 0, Failure = 1, Running = 2, Idle = 3 };
@@ -89,7 +67,8 @@ class BtFactory;
 class Node {
  public:
   using Ptr = std::shared_ptr<Node>;
-  Node(const std::string& name, Type type) : name_(name), type_(type) {}
+  Node(const std::string& name, Type type)
+      : name_(name), type_(type), status_(Status::Idle) {}
   virtual ~Node() = default;
   Status tick();
   virtual Status OnTick() = 0;
@@ -212,10 +191,12 @@ class BtTree {
   void reset();
   void shutdown();
   std::string dump();
+  Json dumpTree();
 
  private:
   void set_node_id(Node::Ptr node);
-  std::string dump_node(Node::Ptr node);
+  std::string dump_node(const Node& node);
+  Json dump_tree_node(const Node& node);
   std::atomic_int ids_{0};
   Node::Ptr root_;
   std::string name_;

@@ -248,19 +248,40 @@ std::string BtTree::dump() {
   for (auto& node : nodes_) {
     ss << node->id_ << "[label=" << node->name_ << "];\n";
   }
-  ss << dump_node(root_);
+  ss << dump_node(*root_);
   ss << "}\n";
   return ss.str();
 }
 
-std::string BtTree::dump_node(Node::Ptr node) {
+xtils::Json BtTree::dumpTree() {
+  Json json;
+  json["root"] = dump_tree_node(*root_);
+  return json;
+}
+
+std::string BtTree::dump_node(const Node& node) {
   std::stringstream ss;
 
-  for (auto& child : node->children) {
-    ss << node->id_ << "->" << child->id_ << ";\n";
-    ss << dump_node(child);
+  for (auto& child : node.children) {
+    ss << node.id_ << "->" << child->id_ << ";\n";
+    ss << dump_node(*child);
   }
   return ss.str();
+}
+
+Json BtTree::dump_tree_node(const Node& node) {
+  Json json;
+  json["name"] = node.name_;
+  json["type"] = static_cast<int>(node.type_);
+  json["status"] = static_cast<int>(node.status_);
+  for (const auto&p : node.get_ports()) {
+  
+  }
+  for (const auto& n : node.children) {
+    json["children"].push_back(dump_tree_node(*n));
+  }
+
+  return json;
 }
 
 }  // namespace xtils
