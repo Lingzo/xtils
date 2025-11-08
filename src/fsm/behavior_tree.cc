@@ -40,14 +40,15 @@ Status Selector::OnTick() {
   return Status::Failure;
 }
 
-BtTree::Ptr BtFactory::buildFromJson(const Json& json) {
+BtTree::Ptr BtFactory::buildFromJson(const Json& json,
+                                     std::shared_ptr<AnyMap> blackboard) {
   if (!json.has_key("root")) {
     throw xtils::runtime_error("Node JSON must have a root");
   }
   auto j = json["root"];
 
   auto root = buildNode(j);
-  auto tree = std::make_shared<BtTree>(root);
+  auto tree = std::make_shared<BtTree>(root, "BehaviorTree", blackboard);
   return tree;
 }
 
@@ -113,13 +114,7 @@ Node::Ptr BtFactory::buildNode(const Json& j) {
           } else if (p["value"].is_bool()) {
             node->data_.set(name, p["value"].as_bool());
           } else if (p["value"].is_string()) {
-            std::string value = p["value"].as_string();
-            if (value.empty() && value[0] == '&') {
-              // support black board
-              LogTodo();
-            } else {
-              node->data_.set(name, p["value"].as_string());
-            }
+            node->data_.set(name, p["value"].as_string());
           } else {
             LogW("Unsupported prot: %s", p.dump(0).c_str());
           }
@@ -145,9 +140,9 @@ BtFactory::BtFactory() {
 
 std::string BtFactory::dump() const {
   Json arr;
-  for (const auto& [id, factory] : nodes_) {
+  for (const auto& [name, factory] : nodes_) {
     Json jsObj;
-    jsObj["id"] = id;
+    jsObj["name"] = name;
     jsObj["type"] = static_cast<int>(factory.type);
     jsObj["ports"];
     for (auto& p : factory.ports) {
@@ -227,13 +222,20 @@ Status Inverter::OnTick() {
 }
 
 // BtTree
-BtTree::BtTree(Node::Ptr root, const std::string& name)
+BtTree::BtTree(Node::Ptr root, const std::string& name,
+               std::shared_ptr<AnyMap> blackboard)
     : root_(root), name_(name) {
+  if (blackboard) {
+    blackboard_ = blackboard;
+  } else {
+    blackboard_ = std::make_shared<AnyMap>();
+  }
   set_node_id(root_);
 }
 void BtTree::set_node_id(Node::Ptr node) {
   nodes_.push_back(node);
   node->id_ = ids_.fetch_add(1);
+  node->blackboard_ = blackboard_.get();
   for (auto& child : node->children) {
     set_node_id(child);
   }
@@ -274,7 +276,7 @@ Json BtTree::dump_tree_node(const Node& node) {
   json["id"] = node.name_;
   json["type"] = static_cast<int>(node.type_);
   //  json["status"] = static_cast<int>(node.status_);
-  for (const auto& p : node.data_.map_) {
+  for (const auto& p : node.data_) {
     Json port;
     auto& e = p.second;
     auto& n = p.first;

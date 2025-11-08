@@ -2,7 +2,6 @@
 #include <xtils/utils/json.h>
 #include <xtils/utils/type_traits.h>
 
-#include <any>
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -35,6 +34,11 @@ AnyData make_any_data(const T& t) {
 
 class AnyMap {
  public:
+  // no copy/move
+  AnyMap(const AnyMap&) = delete;
+  AnyMap& operator=(const AnyMap&) = delete;
+  AnyMap() = default;
+
   template <typename T>
   void set(const std::string& name, const T& t) {
     map_[name] = make_any_data(t);
@@ -53,6 +57,21 @@ class AnyMap {
     return map_.find(name) != map_.end();
   }
 
+  bool try_str(const std::string& name, std::string& out) const {
+    auto it = map_.find(name);
+    if (it == map_.end() ||
+        it->second.type_name != xtils::type_name<std::string>())
+      return false;
+    out = *(it->second.get<std::string>());
+    return true;
+  }
+  auto begin() { return map_.begin(); }
+  auto end() { return map_.end(); }
+
+  std::size_t size() const { return map_.size(); }
+
+  auto begin() const { return map_.begin(); }
+  auto end() const { return map_.end(); }
   std::vector<std::string> keys() const {
     std::vector<std::string> keys;
     for (const auto& pair : map_) {
@@ -61,6 +80,7 @@ class AnyMap {
     return keys;
   }
 
+ private:
   std::map<std::string, AnyData> map_;
 };
 
@@ -109,11 +129,29 @@ class Node {
 
   template <typename T>
   std::optional<T> getInput(const std::string& name) {
+    std::string str_val;
+    if (data_.try_str(name, str_val)) {
+      if (!str_val.empty() && str_val[0] == '&' && blackboard_ &&
+          blackboard_->has(str_val.substr(1))) {
+        return blackboard_->get<T>(str_val.substr(1));
+      }
+      if constexpr (std::is_same_v<T, std::string>) {
+        return str_val;
+      }
+    }
+
     return data_.get<T>(name);
   }
 
   template <typename T>
   void setOutput(const std::string& name, const T& t) {
+    std::string str_val;
+    if (data_.try_str(name, str_val)) {
+      if (!str_val.empty() && str_val[0] == '&' && blackboard_) {
+        blackboard_->set<T>(str_val.substr(1), t);
+        return;
+      }
+    }
     return data_.set(name, t);
   }
 
@@ -126,6 +164,7 @@ class Node {
   Status status_;
   int id_;
   std::vector<Node::Ptr> children;
+  AnyMap* blackboard_{nullptr};
   AnyMap data_;
 };
 
@@ -213,12 +252,24 @@ class Delay : public Decorator {
 class BtTree {
  public:
   using Ptr = std::shared_ptr<BtTree>;
-  BtTree(Node::Ptr root, const std::string& name = "");
+  explicit BtTree(Node::Ptr root, const std::string& name = "",
+                  std::shared_ptr<AnyMap> blackboard = nullptr);
+  // no copy/move
+  BtTree(const BtTree&) = delete;
+  BtTree& operator=(const BtTree&) = delete;
+
   Status tick();
   void reset();
   void shutdown();
   std::string dump();
   Json dumpTree();
+
+  AnyMap& blackboard() {
+    if (!blackboard_) {
+      blackboard_ = std::make_shared<AnyMap>();
+    }
+    return *blackboard_;
+  }
 
  private:
   void set_node_id(Node::Ptr node);
@@ -228,6 +279,7 @@ class BtTree {
   Node::Ptr root_;
   std::string name_;
   std::vector<Node::Ptr> nodes_;
+  std::shared_ptr<AnyMap> blackboard_;
 };
 
 // Factory / builder that parses JSON and constructs nodes.
@@ -256,7 +308,8 @@ class BtFactory {
                     Type::Action};
   }
   // Build tree from json
-  BtTree::Ptr buildFromJson(const Json& j);
+  BtTree::Ptr buildFromJson(const Json& j,
+                            std::shared_ptr<AnyMap> blackboard = nullptr);
   std::string dump() const;
 
  private:

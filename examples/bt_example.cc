@@ -21,7 +21,7 @@ const std::string example_tree = R"(
                   "name": "delay",
                   "value": 10
                 }],
-                "child": {
+                "children": {
                   "id": "MySimpleAction",
                   "type": 1
                 }
@@ -29,7 +29,7 @@ const std::string example_tree = R"(
               {
                 "id": "Inverter",
                 "type": 2,
-                "child": {
+                "children": {
                   "id": "AlwaysFailure",
                   "type": 1
                 }
@@ -37,13 +37,58 @@ const std::string example_tree = R"(
             ]
           },
           {
-            "id": "AlwaysSuccess",
-            "type": 1
+            "id": "ActionWithBlackboard",
+            "type": 1,
+            "name": "ActionWithBlackboard",
+            "ports": [{"name": "example_key", "value": 100, "mode": 0, "type_name": "int"},
+                      {"name": "my_object", "mode": 0, "type_name": "std::shared_ptr<MyCalss>", "value": "&my_object"}]
           }
         ]
       }
     }
 )";
+
+class MyCalss {
+ public:
+  MyCalss() {}
+  void doSomething() {
+    LogI("Doing something in MyCalss");
+    helperFunction();
+  }
+
+ private:
+  void helperFunction() { LogI("Helper function in MyCalss"); }
+};
+
+class ActionWithBlackboard : public xtils::ActionNode {
+ public:
+  ActionWithBlackboard(const std::string& name = "") : ActionNode(name) {}
+
+  static std::vector<xtils::IPort> get_ports() {
+    return {xtils::InputPort<int>("example_key"),
+            xtils::InputPort<std::shared_ptr<MyCalss>>("my_object")};
+  }
+  xtils::Status OnTick() override {
+    // Access blackboard data
+    if (blackboard_) {
+      auto value = blackboard_->get<int>("example_key");
+      if (value) {
+        LogI("Retrieved from blackboard: example_key = %d", *value);
+        setOutput<int>("example_key", *value + 1);
+      } else {
+        LogW("example_key not found in blackboard");
+      }
+
+      auto obj = getInput<std::shared_ptr<MyCalss>>("my_object");
+      if (obj && *obj) {
+        (*obj)->doSomething();
+      } else {
+        LogW("my_object not found in blackboard");
+      }
+    }
+    return xtils::Status::Success;
+  }
+};
 
 class BtService : public xtils::Service {
  public:
@@ -54,6 +99,7 @@ class BtService : public xtils::Service {
           return xtils::Status::Success;
         },
         "MySimpleAction");
+    factory.Register<ActionWithBlackboard>("ActionWithBlackboard");
   }
   void init() override {
     LogI("%s", factory.dump().c_str());
@@ -62,6 +108,11 @@ class BtService : public xtils::Service {
     auto tree = factory.buildFromJson(j.value());
     LogI("\n%s", tree->dump().c_str());
     LogI("\n%s", tree->dumpTree().dump(2).c_str());
+    auto& blackboard = tree->blackboard();
+    auto obj = std::make_shared<MyCalss>();
+    blackboard.set("example_key", 42);
+    blackboard.set("my_object", obj);
+
     ctx->every(1000, [this, tree]() {
       auto status = tree->tick();
       LogI("%d", status);
