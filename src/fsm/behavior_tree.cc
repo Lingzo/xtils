@@ -108,9 +108,9 @@ Node::Ptr BtFactory::buildNode(const Json& j) {
             } else if (it->type_name == xtils::type_name<int8_t>()) {
               node->data_.set<int8_t>(name, p["value"].as_integer());
             } else if (it->type_name == xtils::type_name<float>()) {
-              node->data_.set<float>(name, p["value"].as_float());
+              node->data_.set<float>(name, p["value"].as_number());
             } else if (it->type_name == xtils::type_name<double>()) {
-              node->data_.set<double>(name, p["value"].as_float());
+              node->data_.set<double>(name, p["value"].as_number());
             } else {
               LogW("Unsupported type: %s", it->type_name.c_str());
             }
@@ -209,15 +209,17 @@ void Node::reset() {
 }
 
 Delay::Delay(const std::string& name) : Decorator(name) {}
-Status Delay::OnStart() {
-  delay_ = getInput<int>("delay").value();
 
+Status Delay::OnStart() {
+  auto delay_opt = getInput<double>("delay_ms");
+  if (!delay_opt) throw xtils::runtime_error("Delay Requires delay_ms input");
+  delay_ms_ = *delay_opt;
+  start_time_ = steady::GetCurrentMs();
   return Status::Running;
 }
 Status Delay::OnTick() {
   if (!children.empty()) return Status::Failure;
-  if (delay_ > 0) {
-    delay_--;
+  if (steady::GetCurrentMs() - start_time_ < delay_ms_) {
     return Status::Running;
   } else {
     return children[0]->tick();
@@ -243,14 +245,14 @@ BtTree::BtTree(Node::Ptr root, const std::string& name,
   } else {
     blackboard_ = std::make_shared<AnyMap>();
   }
-  set_node_id(root_);
+  visit_nodes(root_);
 }
-void BtTree::set_node_id(Node::Ptr node) {
+void BtTree::visit_nodes(Node::Ptr& node) {
   nodes_.push_back(node);
   node->id_ = ids_.fetch_add(1);
   node->blackboard_ = blackboard_.get();
   for (auto& child : node->children) {
-    set_node_id(child);
+    visit_nodes(child);
   }
 }
 Status BtTree::tick() { return root_->tick(); }

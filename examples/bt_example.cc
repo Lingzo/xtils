@@ -8,41 +8,40 @@
 const std::string example_tree = R"(
     {
       "root": {
-        "id": "Selector",
+        "name": "Selector",
         "type": 0,
         "children": [
           {
-            "id": "Sequence",
+            "name": "Sequence",
             "type": 0,
             "children": [
               {
-                "id": "Delay",
+                "name": "Delay",
                 "type": 2,
                 "ports": [{
-                  "name": "delay",
+                  "name": "delay_ms",
                   "value": 10
                 }],
-                "children": {
-                  "id": "MySimpleAction",
+                "children": [{
+                  "name": "MySimpleAction",
                   "type": 1
-                }
+                }]
               },
               {
-                "id": "Inverter",
+                "name": "Inverter",
                 "type": 2,
-                "children": {
+                "children": [{
                   "id": "AlwaysFailure",
                   "type": 1
-                }
+                }]
               }
             ]
           },
           {
-            "id": "ActionWithBlackboard",
             "type": 1,
             "name": "ActionWithBlackboard",
-            "ports": [{"name": "example_key", "value": 100, "mode": 0, "type_name": "int"},
-                      {"name": "my_object", "mode": 0, "type_name": "std::shared_ptr<MyCalss>", "value": "&my_object"}]
+            "ports": [{"name": "example_key", "value": 100},
+                      {"name": "my_object", "value": "&my_object"}]
           }
         ]
       }
@@ -65,7 +64,7 @@ class ActionWithBlackboard : public xtils::ActionNode {
  public:
   ActionWithBlackboard(const std::string& name = "") : ActionNode(name) {}
 
-  static std::vector<xtils::IPort> get_ports() {
+  static xtils::Ports getPorts() {
     return {xtils::InputPort<int>("example_key"),
             xtils::InputPort<std::shared_ptr<MyCalss>>("my_object")};
   }

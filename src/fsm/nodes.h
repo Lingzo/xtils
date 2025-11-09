@@ -53,13 +53,11 @@ class RandomSelector : public Composite {
 class Timeout : public Decorator {
  public:
   Timeout(const std::string& name) : Decorator(name) {}
-  static std::vector<IPort> get_ports() {
-    return {xtils::InputPort<int>("timeout_ms")};
-  }
+  static Ports getPots() { return {xtils::InputPort<double>("timeout_ms")}; }
 
   xtils::Status OnStart() override {
     start_time_ = xtils::steady::GetCurrentMs();
-    auto timeout_opt = getInput<int>("timeout_ms");
+    auto timeout_opt = getInput<double>("timeout_ms");
     if (!timeout_opt) {
       throw xtils::runtime_error("Timeout decorator requires timeout_ms input");
     }
@@ -88,9 +86,7 @@ class Timeout : public Decorator {
 class Retry : public Decorator {
  public:
   Retry(const std::string& name) : Decorator(name) {}
-  static std::vector<IPort> get_ports() {
-    return {xtils::InputPort<int>("max_retries")};
-  }
+  static Ports getPorts() { return {xtils::InputPort<int>("max_retries")}; }
   xtils::Status OnStart() override {
     attempt_count_ = 0;
     auto max_retries_opt = getInput<int>("max_retries");
@@ -120,9 +116,7 @@ class Retry : public Decorator {
 class Repeater : public Decorator {
  public:
   Repeater(const std::string& name) : Decorator(name) {}
-  static std::vector<IPort> get_ports() {
-    return {xtils::InputPort<int>("repeat_count")};
-  }
+  static Ports getPorts() { return {xtils::InputPort<int>("repeat_count")}; }
   xtils::Status OnStart() override {
     current_count_ = 0;
     auto repeat_count_opt = getInput<int>("repeat_count");
@@ -184,12 +178,10 @@ class Fallback : public Composite {
 class Wait : public ActionNode {
  public:
   Wait(const std::string& name) : ActionNode(name) {}
-  static std::vector<IPort> get_ports() {
-    return {xtils::InputPort<int>("wait_ms")};
-  }
+  static Ports getPorts() { return {xtils::InputPort<double>("wait_ms")}; }
 
   xtils::Status OnStart() override {
-    auto wait_ms_opt = getInput<int>("wait_ms");
+    auto wait_ms_opt = getInput<double>("wait_ms");
     if (!wait_ms_opt) {
       throw xtils::runtime_error("Wait action requires wait_ms input");
     }

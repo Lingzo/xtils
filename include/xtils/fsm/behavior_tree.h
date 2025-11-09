@@ -93,6 +93,7 @@ struct IPort {
   int mode;
   const std::string type_name;
 };
+using Ports = std::vector<IPort>;
 
 template <typename T>
 class InputPort : public IPort {
@@ -126,7 +127,7 @@ class Node {
   Type getType() const { return type_; }
   Status getStatus() const { return status_; }
 
-  static std::vector<IPort> get_ports() { return {}; }
+  static Ports getPorts() { return {}; }
   static std::string desc() { return ""; }
 
   template <typename T>
@@ -245,10 +246,11 @@ class Delay : public Decorator {
   Delay(const std::string& name = "");
   Status OnTick() override;
   Status OnStart() override;
-  static std::vector<IPort> get_ports() { return {InputPort<int>("delay")}; }
+  static Ports getPorts() { return {InputPort<double>("delay_ms")}; }
 
  private:
-  int delay_;
+  int delay_ms_;
+  int start_time_;
 };
 
 class BtTree {
@@ -274,7 +276,7 @@ class BtTree {
   }
 
  private:
-  void set_node_id(Node::Ptr node);
+  void visit_nodes(Node::Ptr& node);
   std::string dump_node(const Node& node);
   Json dump_tree_node(const Node& node);
   std::atomic_int ids_{0};
@@ -300,7 +302,7 @@ class BtFactory {
       type = Type::Action;
     }
     nodes_[name] = {[](const std::string& n) { return std::make_shared<T>(n); },
-                    type, T::get_ports()};
+                    type, T::getPorts()};
   }
   void RegisterSimpleAction(std::function<Status()> func,
                             const std::string& name) {
@@ -318,7 +320,7 @@ class BtFactory {
   struct Factory {
     std::function<Node::Ptr(const std::string&)> create;
     Type type;
-    std::vector<IPort> ports;
+    Ports ports;
   };
   std::unordered_map<std::string, Factory> nodes_;
   Node::Ptr buildNode(const Json& j);
