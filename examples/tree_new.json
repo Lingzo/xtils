@@ -1,0 +1,36 @@
+{
+  "root": {
+    "name": "Sequence",
+    "type": 0,
+    "children": [
+      {
+        "name": "Repeater",
+        "type": 2,
+        "ports": {
+          "repeat_count": 2
+        },
+        "children": [
+          {
+            "name": "ActionWithBlackboard",
+            "type": 1,
+            "ports": {
+              "example_key": 123,
+              "my_object": "&my_object"
+            }
+          }
+        ]
+      },
+      {
+        "name": "MySimpleAction",
+        "type": 1
+      },
+      {
+        "name": "Wait",
+        "type": 1,
+        "ports": {
+          "wait_ms": 1000
+        }
+      }
+    ]
+  }
+}

@@ -8,40 +8,36 @@
 const std::string example_tree = R"(
     {
       "root": {
-        "name": "Selector",
+        "name": "Sequence",
         "type": 0,
         "children": [
           {
-            "name": "Sequence",
-            "type": 0,
+            "name": "Repeater",
+            "type": 2,
+            "ports": {
+              "repeat_count": 2
+            },
             "children": [
               {
-                "name": "Delay",
-                "type": 2,
-                "ports": [{
-                  "name": "delay_ms",
-                  "value": 10
-                }],
-                "children": [{
-                  "name": "MySimpleAction",
-                  "type": 1
-                }]
-              },
-              {
-                "name": "Inverter",
-                "type": 2,
-                "children": [{
-                  "id": "AlwaysFailure",
-                  "type": 1
-                }]
+                "name": "ActionWithBlackboard",
+                "type": 1,
+                "ports": {
+                  "example_key": 123,
+                  "my_object": "&my_object"
+                }
               }
             ]
           },
           {
+            "name": "MySimpleAction",
+            "type": 1
+          },
+          {
+            "name": "Wait",
             "type": 1,
-            "name": "ActionWithBlackboard",
-            "ports": [{"name": "example_key", "value": 100},
-                      {"name": "my_object", "value": "&my_object"}]
+            "ports": {
+              "wait_ms": 1000
+            }
           }
         ]
       }
@@ -52,12 +48,14 @@ class MyCalss {
  public:
   MyCalss() {}
   void doSomething() {
+    value_++;
     LogI("Doing something in MyCalss");
     helperFunction();
   }
 
  private:
-  void helperFunction() { LogI("Helper function in MyCalss"); }
+  int value_ = 0;
+  void helperFunction() { LogI("Helper function in MyCalss, %d", value_); }
 };
 
 class ActionWithBlackboard : public xtils::ActionNode {
@@ -78,7 +76,8 @@ class ActionWithBlackboard : public xtils::ActionNode {
       } else {
         LogW("example_key not found in blackboard");
       }
-
+      auto value_in = getInput<int>("example_key");
+      blackboard_->set("example_key", *value_in + 1);
       auto obj = getInput<std::shared_ptr<MyCalss>>("my_object");
       if (obj && *obj) {
         (*obj)->doSomething();
@@ -106,7 +105,7 @@ class BtService : public xtils::Service {
     file_utils::write("./bt_nodes.json", factory.dump());
     // Initialize the behavior tree service
     std::string example;
-    file_utils::read("./tree.json", &example);
+    file_utils::read("./tree_new.json", &example);
     if (example.empty()) {
       example = example_tree;
       LogW("Using default example tree");
@@ -122,8 +121,9 @@ class BtService : public xtils::Service {
     LogI("\n%s", tree->dump().c_str());
     LogI("\n%s", tree->dumpTree().dump(2).c_str());
     auto& blackboard = tree->blackboard();
-    auto obj = std::make_shared<MyCalss>();
-    blackboard.set("example_key", 42);
+    const auto obj = std::make_shared<MyCalss>();
+    const int key_value = 42;
+    blackboard.set("example_key", key_value);
     blackboard.set("my_object", obj);
 
     ctx->every(1000, [this, tree]() {

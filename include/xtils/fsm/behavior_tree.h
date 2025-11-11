@@ -5,7 +5,10 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -13,8 +16,9 @@ namespace xtils {
 
 using Json = xtils::Json;
 struct AnyData {
-  std::string type_name;
+  std::string_view type_name;
   std::shared_ptr<void> data;
+  AnyData() = default;
   template <typename T>
   T* get() const {
     if (type_name != ::xtils::type_name<T>()) {
@@ -27,8 +31,8 @@ struct AnyData {
 template <typename T>
 AnyData make_any_data(const T& t) {
   AnyData any_data;
-  any_data.type_name = std::string(::xtils::type_name<T>());
-  any_data.data = std::make_shared<T>(t);
+  any_data.type_name = ::xtils::type_name<std::decay_t<T>>();
+  any_data.data = std::make_unique<std::decay_t<T>>(t);
   return any_data;
 }
 
@@ -50,7 +54,7 @@ class AnyMap {
     if (it == map_.end()) return std::nullopt;
 
     const T* result = it->second.get<T>();
-    return result ? std::optional<T>(*result) : std::nullopt;
+    return result ? std::make_optional<T>(*result) : std::nullopt;
   }
 
   bool has(const std::string& name) const {
@@ -161,14 +165,16 @@ class Node {
  protected:
   friend class BtTree;
   friend class BtFactory;
-  Type type_;
-  std::string name_;
-  bool started_{false};
-  Status status_;
-  int id_;
   std::vector<Node::Ptr> children;
   AnyMap* blackboard_{nullptr};
   AnyMap data_;
+
+ private:
+  Type type_;
+  int id_;
+  std::string name_;
+  bool started_{false};
+  Status status_;
 };
 
 // Composite nodes
