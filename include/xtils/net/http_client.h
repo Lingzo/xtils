@@ -15,8 +15,7 @@ namespace xtils {
 
 struct HttpRequest {
   HttpMethod method = HttpMethod::kGet;
-  std::string url;
-  std::string path = "/";
+  HttpUrl url;
   HttpHeaders headers;
   std::string body;
   uint32_t timeout_ms = 30000;  // 30 seconds default
@@ -142,7 +141,7 @@ class HttpClient : public TcpClientEventListener {
 
   // HTTP protocol handling
   std::string BuildHttpRequest(const HttpRequest& request);
-  bool SendHttpRequest(const HttpRequest& request);
+  bool SendHttpRequest(const HttpUrl& url);
   void ProcessReceivedData(const void* data, size_t len);
   bool ParseHttpResponse();
   void HandleRedirect();

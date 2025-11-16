@@ -3,6 +3,7 @@
 #include <sstream>
 #include <thread>
 
+#include "xtils/logging/logger.h"
 #include "xtils/net/http_common.h"
 
 namespace xtils {
@@ -104,19 +105,18 @@ bool HttpClient::RequestAsync(const HttpRequest& request) {
   current_request_ = request;
   redirect_count_ = 0;
 
-  HttpUrl url(request.url);
-  if (!url.IsValid()) {
-    HandleError("Invalid URL: " + request.url);
+  if (!request.url.IsValid()) {
+    HandleError("Invalid URL: " + request.url.ToString());
     return false;
   }
 
-  return SendHttpRequest(request);
+  return SendHttpRequest(request.url);
 }
 
 HttpResponse HttpClient::Get(const std::string& url) {
   HttpRequest request;
   request.method = HttpMethod::kGet;
-  request.url = url;
+  request.url = HttpUrl(url);
   return Request(request);
 }
 
@@ -124,7 +124,7 @@ HttpResponse HttpClient::Post(const std::string& url, const std::string& body,
                               const std::string& content_type) {
   HttpRequest request;
   request.method = HttpMethod::kPost;
-  request.url = url;
+  request.url = HttpUrl(url);
   request.SetBody(body, content_type);
   return Request(request);
 }
@@ -144,7 +144,7 @@ HttpResponse HttpClient::PostForm(
 bool HttpClient::GetAsync(const std::string& url) {
   HttpRequest request;
   request.method = HttpMethod::kGet;
-  request.url = url;
+  request.url = HttpUrl(url);
   return RequestAsync(request);
 }
 
@@ -152,7 +152,7 @@ bool HttpClient::PostAsync(const std::string& url, const std::string& body,
                            const std::string& content_type) {
   HttpRequest request;
   request.method = HttpMethod::kPost;
-  request.url = url;
+  request.url = HttpUrl(url);
   request.SetBody(body, content_type);
   return RequestAsync(request);
 }
@@ -326,14 +326,15 @@ std::string HttpClient::BuildHttpRequest(const HttpRequest& request) {
   return ss.str();
 }
 
-bool HttpClient::SendHttpRequest(const HttpRequest& request) {
-  HttpUrl url(request.url);
-
+bool HttpClient::SendHttpRequest(const HttpUrl& url) {
   // Check if we can reuse existing connection
   bool can_reuse = connection_reusable_ && connected_host_ == url.host &&
                    connected_port_ == url.port && tcp_client_->IsConnected();
 
   if (!can_reuse) {
+    if (tcp_client_->IsConnected()) {
+      tcp_client_->Disconnect();
+    }
     if (!ConnectToHost(url)) {
       return false;
     }
@@ -408,7 +409,7 @@ bool HttpClient::ParseHttpResponse() {
 
   std::string status_line = header_text.substr(0, first_line_end);
   std::istringstream status_stream(status_line);
-
+  current_response_ = HttpResponse();
   std::string http_version;
   status_stream >> http_version >> current_response_.status_code;
 
@@ -448,32 +449,42 @@ bool HttpClient::ParseHttpResponse() {
 }
 
 void HttpClient::HandleRedirect() {
+  redirect_count_++;
   if (!follow_redirects_ || redirect_count_ >= max_redirects_) {
-    CompleteRequest();
+    HandleError("redirect count exceeded limit");
     return;
   }
 
   std::string location = current_response_.GetHeader("Location");
-  if (location.empty()) {
+  if (!location.empty()) {
+    HttpUrl new_url(current_request_.url);
+    if (location[0] == '/') {
+      new_url.path = location;
+    } else {
+      new_url = HttpUrl(location);
+    }
+    LogI("Redirecting to: %s, %s", new_url.ToString().c_str(),
+         location.c_str());
+    current_request_.url = new_url;
+    if (!new_url.IsValid()) {
+      HandleError("invalid URL");
+      return;
+    }
+
+    if (listener_) {
+      listener_->OnRedirect(this, location);
+    }
+    current_request_.url = new_url;
+    // Send new request
+    if (!SendHttpRequest(new_url)) {
+      HandleError("failed to send request");
+    }
+  } else {
     CompleteRequest();
-    return;
   }
-
-  redirect_count_++;
-
-  // Update request URL
-  current_request_.url = location;
-
-  if (listener_) {
-    listener_->OnRedirect(this, location);
-  }
-
-  // Send new request
-  SendHttpRequest(current_request_);
 }
 
 void HttpClient::CompleteRequest() {
-  state_ = State::kCompleted;
   last_response_ = current_response_;
 
   // Handle redirects
@@ -498,10 +509,11 @@ void HttpClient::CompleteRequest() {
     listener_->OnHttpResponse(this, current_response_);
   }
 
-  state_ = State::kIdle;
+  state_ = State::kCompleted;
 }
 
 void HttpClient::HandleError(const std::string& error) {
+  LogI("%s", error.c_str());
   state_ = State::kError;
   connection_reusable_ = false;
 
@@ -517,7 +529,7 @@ bool HttpClient::ConnectToHost(const HttpUrl& url) {
   connected_host_ = url.host;
   connected_port_ = url.port;
 
-  return tcp_client_->Connect(url.host, url.port);
+  return tcp_client_->ConnectToHost(url.host, url.port);
 }
 
 HttpHeaders HttpClient::MergeHeaders(const HttpHeaders& request_headers) {
