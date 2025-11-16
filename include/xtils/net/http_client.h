@@ -1,9 +1,12 @@
 #pragma once
 
+#include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -12,6 +15,19 @@
 #include "xtils/tasks/task_runner.h"
 
 namespace xtils {
+
+// Multipart form data structures
+struct MultipartFile {
+  std::string field_name;    // Form field name (e.g., "file")
+  std::string filename;      // Filename to send (e.g., "photo.jpg")
+  std::string content_type;  // MIME type (e.g., "image/jpeg")
+  std::string file_path;     // Path to file on disk
+};
+
+struct MultipartField {
+  std::string name;
+  std::string value;
+};
 
 struct HttpRequest {
   HttpMethod method = HttpMethod::kGet;
@@ -28,6 +44,16 @@ struct HttpRequest {
   void SetBody(const std::string& data, const std::string& content_type = "");
   void SetJsonBody(const std::string& json);
   void SetFormBody(const std::map<std::string, std::string>& form_data);
+  void SetMultipartBody(const std::vector<MultipartField>& fields,
+                        const std::vector<MultipartFile>& files);
+  bool is_multipart() const {
+    return !multipart_fields.empty() || !multipart_files.empty();
+  }
+
+  // Multipart is handled differently - don't load into body
+  std::vector<MultipartField> multipart_fields;
+  std::vector<MultipartFile> multipart_files;
+  std::string boundary;  // For multipart/form-data
 };
 
 struct HttpResponse {
@@ -65,6 +91,12 @@ class HttpClientEventListener {
 
   // Called when following redirects
   virtual void OnRedirect(HttpClient* client, const std::string& new_url) {}
+
+  // Called when receiving body data (for streaming large files)
+  // Return false to stop receiving more data
+  virtual bool OnBodyData(HttpClient* client, const void* data, size_t len) {
+    return true;
+  }
 };
 
 class HttpClient : public TcpClientEventListener {
@@ -95,12 +127,18 @@ class HttpClient : public TcpClientEventListener {
   HttpResponse PostJson(const std::string& url, const std::string& json);
   HttpResponse PostForm(const std::string& url,
                         const std::map<std::string, std::string>& form_data);
+  HttpResponse PostMultipart(const std::string& url,
+                             const std::vector<MultipartField>& fields,
+                             const std::vector<MultipartFile>& files);
 
   // Async versions
   bool GetAsync(const std::string& url);
   bool PostAsync(const std::string& url, const std::string& body,
                  const std::string& content_type = "");
   bool PostJsonAsync(const std::string& url, const std::string& json);
+  bool PostMultipartAsync(const std::string& url,
+                          const std::vector<MultipartField>& fields,
+                          const std::vector<MultipartFile>& files);
 
   // Cancel current request
   void Cancel();
@@ -112,6 +150,7 @@ class HttpClient : public TcpClientEventListener {
   void SetTimeout(uint32_t timeout_ms);
   void SetFollowRedirects(bool follow, int max_redirects = 5);
   void SetKeepAlive(bool keep_alive);
+  void SetMaxReceiveBufferSize(size_t max_size);
 
   // Cookie management
   void SetCookie(const std::string& name, const std::string& value,
@@ -124,9 +163,11 @@ class HttpClient : public TcpClientEventListener {
   void SetSSLCertificate(const std::string& cert_path);
 
   // State
-  State GetState() const { return state_; }
+  State GetState() const { return state_.load(); }
   bool IsBusy() const {
-    return state_ != State::kIdle && state_ != State::kCompleted;
+    State current_state = state_.load();
+    return current_state != State::kIdle &&
+           current_state != State::kCompleted && current_state != State::kError;
   }
 
   // Get last response (for sync requests)
@@ -141,8 +182,13 @@ class HttpClient : public TcpClientEventListener {
 
   // HTTP protocol handling
   std::string BuildHttpRequest(const HttpRequest& request);
-  bool SendHttpRequest(const HttpUrl& url);
+  bool SendHttpRequest(const HttpRequest& request);
+  bool SendMultipartBody(
+      const HttpRequest& request);  // Send multipart body in chunks
   void ProcessReceivedData(const void* data, size_t len);
+  void ProcessHeaders();
+  void ProcessBody(const void* data, size_t len);
+  bool IsResponseComplete();
   bool ParseHttpResponse();
   void HandleRedirect();
   void CompleteRequest();
@@ -162,39 +208,75 @@ class HttpClient : public TcpClientEventListener {
                               const std::string& domain);
   std::string BuildCookieHeader(const std::string& domain);
 
+  // Multipart utilities
+  std::string GenerateBoundary();
+  size_t CalculateMultipartSize(const std::vector<MultipartField>& fields,
+                                const std::vector<MultipartFile>& files,
+                                const std::string& boundary);
+
+  void CheckBufferSizeLimit();
+
+  // Request state - encapsulated to avoid forgetting to reset
+  struct RequestState {
+    HttpRequest request;
+    HttpResponse response;
+    std::string receive_buffer;
+    bool headers_received = false;
+    size_t content_length = 0;
+    size_t bytes_received = 0;
+    bool chunked_encoding = false;
+    int redirect_count = 0;
+    uint32_t timeout_ms = 0;
+    std::atomic<bool> timeout_scheduled{false};
+    std::atomic<bool> completed{false};
+
+    size_t bytes_sent = 0;
+    size_t total_bytes = 0;
+
+    void Reset() {
+      request = HttpRequest();
+      response = HttpResponse();
+      receive_buffer.clear();
+      headers_received = false;
+      content_length = 0;
+      bytes_received = 0;
+      chunked_encoding = false;
+      redirect_count = 0;
+      timeout_ms = 0;
+      timeout_scheduled.store(false);
+      completed.store(false);
+      bytes_sent = 0;
+      total_bytes = 0;
+    }
+  };
+
   TaskRunner* task_runner_;
   HttpClientEventListener* listener_;
   std::unique_ptr<TcpClient> tcp_client_;
-  State state_;
+  std::atomic<State> state_;
 
-  // Current request/response
-  HttpRequest current_request_;
-  HttpResponse current_response_;
+  // Current request state
+  RequestState current_;
   HttpResponse last_response_;
-
-  // Response parsing state
-  std::string receive_buffer_;
-  bool headers_received_;
-  size_t content_length_;
-  size_t bytes_received_;
-  bool chunked_encoding_;
 
   // Configuration
   HttpHeaders default_headers_;
   uint32_t default_timeout_ms_;
   bool follow_redirects_;
   int max_redirects_;
-  int redirect_count_;
   bool keep_alive_;
   bool verify_ssl_;
+  size_t max_receive_buffer_size_;
+  bool streaming_mode_;
 
   // Cookie storage: domain -> cookies
   std::map<std::string, std::map<std::string, std::string>> cookies_;
 
-  // Connection reuse
-  std::string connected_host_;
-  uint16_t connected_port_;
   bool connection_reusable_;
+
+  // Synchronization for sync Request() method
+  std::mutex sync_mutex_;
+  std::condition_variable sync_cv_;
 };
 
 }  // namespace xtils

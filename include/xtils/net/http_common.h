@@ -68,8 +68,18 @@ struct HttpUrl {
 
   std::string ToString() const;
   uint16_t GetDefaultPort() const;
+  HttpUrl base() const {
+    HttpUrl base_url = *this;
+    base_url.path = "/";
+    base_url.query.clear();
+    base_url.fragment.clear();
+    return base_url;
+  }
   bool IsHttps() const { return scheme == "https"; }
   bool IsValid() const { return !host.empty() && !scheme.empty(); }
+  bool isSameHost(const HttpUrl& other) const {
+    return host == other.host && port == other.port;
+  }
 };
 
 // Common HTTP utility functions

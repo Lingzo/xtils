@@ -10,6 +10,8 @@
 #include <set>
 #include <sstream>
 
+#include "xtils/utils/string_utils.h"
+
 namespace xtils {
 
 // HttpUrl implementation
@@ -340,15 +342,8 @@ bool IsErrorStatus(int status_code) { return status_code >= 400; }
 
 std::string GetHeaderValue(const HttpHeaders& headers,
                            const std::string& name) {
-  std::string lower_name = name;
-  std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(),
-                 ::tolower);
-
   for (const auto& header : headers) {
-    std::string header_name = header.name;
-    std::transform(header_name.begin(), header_name.end(), header_name.begin(),
-                   ::tolower);
-    if (header_name == lower_name) {
+    if (CaseInsensitiveEqual(header.name, name)) {
       return header.value;
     }
   }
@@ -361,6 +356,12 @@ bool HasHeader(const HttpHeaders& headers, const std::string& name) {
 
 void AddHeader(HttpHeaders& headers, const std::string& name,
                const std::string& value) {
+  for (auto& header : headers) {
+    if (CaseInsensitiveEqual(header.name, name)) {
+      header.value = value;
+      return;
+    }
+  }
   headers.emplace_back(name, value);
 }
 

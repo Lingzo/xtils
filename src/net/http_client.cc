@@ -1,15 +1,13 @@
 #include "xtils/net/http_client.h"
 
 #include <sstream>
-#include <thread>
 
-#include "xtils/logging/logger.h"
 #include "xtils/net/http_common.h"
+#include "xtils/utils/string_utils.h"
 
 namespace xtils {
 
 // HttpRequest implementation
-
 void HttpRequest::AddHeader(const std::string& name, const std::string& value) {
   headers.emplace_back(name, value);
 }
@@ -44,8 +42,13 @@ void HttpRequest::SetFormBody(
           "application/x-www-form-urlencoded");
 }
 
-// HttpResponse implementation
+void HttpRequest::SetMultipartBody(const std::vector<MultipartField>& fields,
+                                   const std::vector<MultipartFile>& files) {
+  multipart_fields = fields;
+  multipart_files = files;
+}
 
+// HttpResponse implementation
 std::string HttpResponse::GetHeader(const std::string& name) const {
   return HttpUtils::GetHeaderValue(headers, name);
 }
@@ -55,43 +58,47 @@ bool HttpResponse::HasHeader(const std::string& name) const {
 }
 
 // HttpClient implementation
-
 HttpClient::HttpClient(TaskRunner* task_runner,
                        HttpClientEventListener* listener)
     : task_runner_(task_runner),
       listener_(listener),
-      tcp_client_(std::make_unique<TcpClient>(task_runner, this)),
       state_(State::kIdle),
-      headers_received_(false),
-      content_length_(0),
-      bytes_received_(0),
-      chunked_encoding_(false),
       default_timeout_ms_(30000),
       follow_redirects_(true),
       max_redirects_(5),
-      redirect_count_(0),
-      keep_alive_(false),
+      keep_alive_(true),
       verify_ssl_(true),
-      connected_port_(0),
+      max_receive_buffer_size_(100 * 1024 * 1024),
+      streaming_mode_(false),
       connection_reusable_(false) {
+  tcp_client_ = std::make_unique<TcpClient>(task_runner_, this);
   SetUserAgent("xtils-http-client/1.0");
 }
 
 HttpClient::~HttpClient() { Cancel(); }
 
 HttpResponse HttpClient::Request(const HttpRequest& request) {
+  std::unique_lock<std::mutex> lock(sync_mutex_);
+
+  current_.Reset();
+  current_.completed.store(false);
+
   if (!RequestAsync(request)) {
     HttpResponse error_response;
     error_response.status_code = 0;
+    error_response.status_message = "Failed to start request";
     return error_response;
   }
 
-  // Wait for completion (simplified - in real implementation you'd use proper
-  // synchronization)
-  while (IsBusy()) {
-    // This is a simplified sync implementation
-    // In practice, you'd want to use proper event loop integration
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  auto timeout = std::chrono::milliseconds(
+      request.timeout_ms > 0 ? request.timeout_ms : default_timeout_ms_);
+  if (!sync_cv_.wait_for(lock, timeout,
+                         [this]() { return current_.completed.load(); })) {
+    Cancel();
+    HttpResponse timeout_response;
+    timeout_response.status_code = 0;
+    timeout_response.status_message = "Request timeout";
+    return timeout_response;
   }
 
   return last_response_;
@@ -102,15 +109,27 @@ bool HttpClient::RequestAsync(const HttpRequest& request) {
     return false;
   }
 
-  current_request_ = request;
-  redirect_count_ = 0;
+  current_.Reset();
+  current_.request = request;
+  current_.timeout_ms =
+      request.timeout_ms > 0 ? request.timeout_ms : default_timeout_ms_;
 
   if (!request.url.IsValid()) {
-    HandleError("Invalid URL: " + request.url.ToString());
+    HandleError("Invalid URL");
     return false;
   }
 
-  return SendHttpRequest(request.url);
+  // Check if this is a multipart request
+  if (request.is_multipart()) {
+    std::string boundary =
+        request.boundary.empty() ? GenerateBoundary() : request.boundary;
+    current_.request.boundary = boundary;
+    current_.total_bytes = CalculateMultipartSize(
+        request.multipart_fields, request.multipart_files, boundary);
+  }
+
+  state_.store(State::kConnecting);
+  return ConnectToHost(request.url);
 }
 
 HttpResponse HttpClient::Get(const std::string& url) {
@@ -137,8 +156,23 @@ HttpResponse HttpClient::PostJson(const std::string& url,
 HttpResponse HttpClient::PostForm(
     const std::string& url,
     const std::map<std::string, std::string>& form_data) {
-  return Post(url, HttpUtils::FormDataEncode(form_data),
-              "application/x-www-form-urlencoded");
+  HttpRequest request;
+  request.method = HttpMethod::kPost;
+  request.url = HttpUrl(url);
+  request.SetFormBody(form_data);
+  return Request(request);
+}
+
+HttpResponse HttpClient::PostMultipart(
+    const std::string& url, const std::vector<MultipartField>& fields,
+    const std::vector<MultipartFile>& files) {
+  HttpRequest request;
+  request.method = HttpMethod::kPost;
+  request.url = HttpUrl(url);
+  request.multipart_fields = fields;
+  request.multipart_files = files;
+  request.boundary = GenerateBoundary();
+  return Request(request);
 }
 
 bool HttpClient::GetAsync(const std::string& url) {
@@ -162,13 +196,24 @@ bool HttpClient::PostJsonAsync(const std::string& url,
   return PostAsync(url, json, "application/json");
 }
 
+bool HttpClient::PostMultipartAsync(const std::string& url,
+                                    const std::vector<MultipartField>& fields,
+                                    const std::vector<MultipartFile>& files) {
+  HttpRequest request;
+  request.method = HttpMethod::kPost;
+  request.url = HttpUrl(url);
+  request.multipart_fields = fields;
+  request.multipart_files = files;
+  request.boundary = GenerateBoundary();
+  return RequestAsync(request);
+}
+
 void HttpClient::Cancel() {
   if (tcp_client_) {
     tcp_client_->Disconnect();
   }
-  state_ = State::kIdle;
-  receive_buffer_.clear();
-  headers_received_ = false;
+  state_.store(State::kIdle);
+  current_.Reset();
 }
 
 void HttpClient::SetDefaultHeaders(const HttpHeaders& headers) {
@@ -177,7 +222,7 @@ void HttpClient::SetDefaultHeaders(const HttpHeaders& headers) {
 
 void HttpClient::AddDefaultHeader(const std::string& name,
                                   const std::string& value) {
-  default_headers_.emplace_back(name, value);
+  HttpUtils::AddHeader(default_headers_, name, value);
 }
 
 void HttpClient::SetUserAgent(const std::string& user_agent) {
@@ -195,68 +240,74 @@ void HttpClient::SetFollowRedirects(bool follow, int max_redirects) {
 
 void HttpClient::SetKeepAlive(bool keep_alive) { keep_alive_ = keep_alive; }
 
+void HttpClient::SetMaxReceiveBufferSize(size_t max_size) {
+  max_receive_buffer_size_ = max_size;
+}
+
 void HttpClient::SetCookie(const std::string& name, const std::string& value,
                            const std::string& domain) {
-  std::string cookie_domain = domain.empty() ? connected_host_ : domain;
+  std::string cookie_domain = domain.empty() ? "" : domain;
   cookies_[cookie_domain][name] = value;
 }
 
 void HttpClient::ClearCookies() { cookies_.clear(); }
 
 std::string HttpClient::GetCookies(const std::string& domain) const {
-  std::string cookie_domain = domain.empty() ? connected_host_ : domain;
-  auto it = cookies_.find(cookie_domain);
-  if (it == cookies_.end() || it->second.empty()) {
-    return "";
-  }
-
-  std::stringstream ss;
+  std::ostringstream oss;
   bool first = true;
 
-  for (const auto& cookie : it->second) {
-    if (!first) {
-      ss << "; ";
+  for (const auto& domain_cookies : cookies_) {
+    if (domain_cookies.first.empty() || domain_cookies.first == domain) {
+      for (const auto& cookie : domain_cookies.second) {
+        if (!first) oss << "; ";
+        first = false;
+        oss << cookie.first << "=" << cookie.second;
+      }
     }
-    ss << cookie.first << "=" << cookie.second;
-    first = false;
   }
 
-  return ss.str();
+  return oss.str();
 }
 
 void HttpClient::SetVerifySSL(bool verify) { verify_ssl_ = verify; }
 
 void HttpClient::SetSSLCertificate(const std::string& cert_path) {
-  // Placeholder for SSL certificate setting
+  // TODO: Implement SSL certificate loading
+  (void)cert_path;
 }
 
 // TcpClientEventListener implementation
-
 void HttpClient::OnConnected(TcpClient* client, bool success) {
+  (void)client;
+
   if (!success) {
-    HandleError("Failed to connect to server");
+    HandleError("Failed to connect to host");
     return;
   }
 
-  state_ = State::kSendingRequest;
-  std::string http_request = BuildHttpRequest(current_request_);
+  state_.store(State::kSendingRequest);
 
-  if (!client->SendString(http_request)) {
+  // Schedule timeout
+  if (current_.timeout_ms > 0 && !current_.timeout_scheduled.exchange(true)) {
+    task_runner_->PostDelayedTask(
+        [this]() {
+          if (IsBusy() && !current_.completed.load()) {
+            HandleError("Request timeout");
+          }
+        },
+        current_.timeout_ms);
+  }
+
+  // Send the HTTP request
+  if (!SendHttpRequest(current_.request)) {
     HandleError("Failed to send HTTP request");
-    return;
   }
-
-  state_ = State::kReceivingResponse;
-  headers_received_ = false;
-  content_length_ = 0;
-  bytes_received_ = 0;
-  chunked_encoding_ = false;
-  receive_buffer_.clear();
 }
 
 void HttpClient::OnDataReceived(TcpClient* client, const void* data,
                                 size_t len) {
-  receive_buffer_.append(static_cast<const char*>(data), len);
+  (void)client;
+  state_.store(State::kReceivingResponse);
   ProcessReceivedData(data, len);
 }
 
@@ -265,306 +316,415 @@ void HttpClient::OnDisconnected(TcpClient* client) {
     // Connection closed, complete the response if we have enough data
     CompleteRequest();
   }
-  connection_reusable_ = false;
 }
 
 void HttpClient::OnError(TcpClient* client, const std::string& error) {
-  HandleError("TCP error: " + error);
+  (void)client;
+  HandleError(error);
 }
 
 // HTTP protocol handling
-
 std::string HttpClient::BuildHttpRequest(const HttpRequest& request) {
-  HttpUrl url(request.url);
+  std::ostringstream oss;
 
-  std::stringstream ss;
-  ss << HttpUtils::HttpMethodToString(request.method) << " " << url.path;
-
-  if (!url.query.empty()) {
-    ss << "?" << url.query;
+  // Request line
+  oss << HttpUtils::HttpMethodToString(request.method) << " ";
+  oss << (request.url.path.empty() ? "/" : request.url.path);
+  if (!request.url.query.empty()) {
+    oss << "?" << request.url.query;
   }
+  oss << " HTTP/1.1\r\n";
 
-  ss << " HTTP/1.1\r\n";
-  ss << "Host: " << url.host;
-
-  if (url.port != url.GetDefaultPort()) {
-    ss << ":" << url.port;
+  // Host header
+  oss << "Host: " << request.url.host;
+  if ((request.url.scheme == "http" && request.url.port != 80 &&
+       request.url.port != 0) ||
+      (request.url.scheme == "https" && request.url.port != 443 &&
+       request.url.port != 0)) {
+    oss << ":" << request.url.port;
   }
-  ss << "\r\n";
+  oss << "\r\n";
 
-  // Add headers
+  // Merge and add headers
   HttpHeaders merged_headers = MergeHeaders(request.headers);
   for (const auto& header : merged_headers) {
-    ss << header.name << ": " << header.value << "\r\n";
+    oss << header.name << ": " << header.value << "\r\n";
   }
 
   // Add cookies
-  std::string cookies = BuildCookieHeader(url.host);
+  std::string cookies = GetCookies(request.url.host);
   if (!cookies.empty()) {
-    ss << "Cookie: " << cookies << "\r\n";
-  }
-
-  // Add content length if there's a body
-  if (!request.body.empty()) {
-    ss << "Content-Length: " << request.body.length() << "\r\n";
+    oss << "Cookie: " << cookies << "\r\n";
   }
 
   // Connection header
-  if (keep_alive_) {
-    ss << "Connection: keep-alive\r\n";
-  } else {
-    ss << "Connection: close\r\n";
+  oss << "Connection: " << (keep_alive_ ? "keep-alive" : "close") << "\r\n";
+
+  // Handle multipart
+  if (request.is_multipart()) {
+    oss << "Content-Type: multipart/form-data; boundary=" << request.boundary
+        << "\r\n";
+    oss << "Content-Length: " << current_.total_bytes << "\r\n";
+  } else if (!request.body.empty()) {
+    if (!HttpUtils::HasHeader(merged_headers, "Content-Length")) {
+      oss << "Content-Length: " << request.body.size() << "\r\n";
+    }
   }
 
-  ss << "\r\n";
+  // End of headers
+  oss << "\r\n";
 
-  // Add body
-  if (!request.body.empty()) {
-    ss << request.body;
+  // Add body for non-multipart requests
+  if (!request.is_multipart() && !request.body.empty()) {
+    oss << request.body;
   }
 
-  return ss.str();
+  return oss.str();
 }
 
-bool HttpClient::SendHttpRequest(const HttpUrl& url) {
-  // Check if we can reuse existing connection
-  bool can_reuse = connection_reusable_ && connected_host_ == url.host &&
-                   connected_port_ == url.port && tcp_client_->IsConnected();
+bool HttpClient::SendHttpRequest(const HttpRequest& request) {
+  std::string request_text = BuildHttpRequest(request);
 
-  if (!can_reuse) {
-    if (tcp_client_->IsConnected()) {
-      tcp_client_->Disconnect();
-    }
-    if (!ConnectToHost(url)) {
+  if (!tcp_client_->Send(request_text.data(), request_text.size())) {
+    return false;
+  }
+
+  // For multipart, send the body separately
+  if (request.is_multipart()) {
+    return SendMultipartBody(request);
+  }
+
+  return true;
+}
+
+bool HttpClient::SendMultipartBody(const HttpRequest& request) {
+  const std::string& boundary = request.boundary;
+
+  // Send multipart fields
+  for (const auto& field : request.multipart_fields) {
+    std::ostringstream part;
+    part << "--" << boundary << "\r\n";
+    StackString<128> content_disposition(
+        R"(Content-Disposition: form-data; name="%s")", field.name.c_str());
+    part << content_disposition.c_str() << "\r\n\r\n";
+    part << field.value << "\r\n";
+
+    std::string part_str = part.str();
+    if (!tcp_client_->Send(part_str.data(), part_str.size())) {
       return false;
     }
-  } else {
-    // Reuse existing connection
-    OnConnected(tcp_client_.get(), true);
+    current_.bytes_sent += part_str.size();
   }
+
+  // Send multipart files
+  for (const auto& file : request.multipart_files) {
+    std::ostringstream part_header;
+    part_header << "--" << boundary << "\r\n";
+    StackString<256> content_disposition(
+        R"(Content-Disposition: form-data; name="%s"; filename="%s")",
+        file.field_name.c_str(), file.filename.c_str());
+    part_header << content_disposition.c_str() << "\r\n";
+    part_header << "Content-Type: " << file.content_type << "\r\n\r\n";
+
+    std::string header_str = part_header.str();
+    if (!tcp_client_->Send(header_str.data(), header_str.size())) {
+      return false;
+    }
+    current_.bytes_sent += header_str.size();
+
+    // Read file content
+    std::string file_content = HttpUtils::ReadFileContent(file.file_path);
+    if (file_content.empty() && !HttpUtils::FileExists(file.file_path)) {
+      return false;
+    }
+
+    if (!tcp_client_->Send(file_content.data(), file_content.size())) {
+      return false;
+    }
+    current_.bytes_sent += file_content.size();
+
+    // Report progress
+    if (listener_) {
+      listener_->OnProgress(this, current_.bytes_sent, current_.total_bytes);
+    }
+
+    // Send trailing CRLF
+    const char* crlf = "\r\n";
+    if (!tcp_client_->Send(crlf, 2)) {
+      return false;
+    }
+    current_.bytes_sent += 2;
+  }
+
+  // Send final boundary
+  std::string final_boundary = "--" + boundary + "--\r\n";
+  if (!tcp_client_->Send(final_boundary.data(), final_boundary.size())) {
+    return false;
+  }
+  current_.bytes_sent += final_boundary.size();
 
   return true;
 }
 
 void HttpClient::ProcessReceivedData(const void* data, size_t len) {
-  if (!headers_received_) {
-    // Look for end of headers
-    size_t header_end = receive_buffer_.find("\r\n\r\n");
+  current_.receive_buffer.append(static_cast<const char*>(data), len);
+  current_.bytes_received += len;
+
+  // If headers not yet received, try to parse them
+  if (!current_.headers_received) {
+    size_t header_end = current_.receive_buffer.find("\r\n\r\n");
     if (header_end != std::string::npos) {
-      headers_received_ = true;
+      std::string header_text = current_.receive_buffer.substr(0, header_end);
+      ParseResponseHeaders(header_text);
+      current_.headers_received = true;
 
-      if (!ParseHttpResponse()) {
-        HandleError("Failed to parse HTTP response");
-        return;
+      // Remove headers from buffer
+      current_.receive_buffer.erase(0, header_end + 4);
+
+      // Check for chunked encoding or content length
+      std::string transfer_encoding =
+          current_.response.GetHeader("Transfer-Encoding");
+      if (transfer_encoding.find("chunked") != std::string::npos) {
+        current_.chunked_encoding = true;
+        current_.response.chunked_encoding = true;
       }
 
-      // Process any body data that was received with headers
-      size_t body_start = header_end + 4;
-      if (body_start < receive_buffer_.length()) {
-        size_t body_len = receive_buffer_.length() - body_start;
-        bytes_received_ += body_len;
+      std::string content_length_str =
+          current_.response.GetHeader("Content-Length");
+      if (!content_length_str.empty()) {
+        current_.content_length = std::stoull(content_length_str);
+        current_.response.content_length = current_.content_length;
+        if (current_.content_length > max_receive_buffer_size_) {
+          streaming_mode_ = true;
+        }
       }
     }
-  } else {
-    // Accumulating body data
-    bytes_received_ += len;
   }
 
-  // Check if we have received the complete response
-  if (headers_received_) {
-    bool complete = false;
+  // If headers received, process body
+  if (current_.headers_received) {
+    // Call body data callback if in streaming mode
+    if (listener_ && streaming_mode_ && !current_.receive_buffer.empty()) {
+      if (!listener_->OnBodyData(this, current_.receive_buffer.data(),
+                                 current_.receive_buffer.size())) {
+        HandleError("failed to process body data");
+      }
+      current_.receive_buffer.clear();
+      listener_->OnProgress(this, current_.bytes_received,
+                            current_.total_bytes);
+    }
 
-    if (chunked_encoding_) {
-      // Handle chunked encoding (simplified)
-      complete = receive_buffer_.find("0\r\n\r\n") != std::string::npos;
-    } else if (content_length_ > 0) {
-      // Check content length
-      size_t header_end = receive_buffer_.find("\r\n\r\n");
-      size_t body_size = receive_buffer_.length() - (header_end + 4);
-      complete = body_size >= content_length_;
+    // For non-streaming mode, accumulate data
+    if (!streaming_mode_ && !current_.receive_buffer.empty()) {
+      current_.response.body.append(current_.receive_buffer);
+      current_.receive_buffer.clear();
+    }
+
+    // Check if response is complete
+    if (!current_.chunked_encoding) {
+      if (current_.content_length > 0) {
+        if (current_.response.body.size() >= current_.content_length) {
+          // Response complete
+          CompleteRequest();
+        }
+      } else if (current_.response.status_code >= 100 &&
+                 current_.response.status_code < 200) {
+        // 1xx responses don't have body
+        CompleteRequest();
+      } else if (current_.response.status_code == 204 ||
+                 current_.response.status_code == 304) {
+        // No content responses
+        CompleteRequest();
+      }
     } else {
-      // No content length, connection close indicates end
-      complete = false;  // Will be completed in OnDisconnected
-    }
-
-    if (complete) {
-      CompleteRequest();
+      // Handle chunked encoding - simplified
+      if (current_.response.body.find("0\r\n\r\n") != std::string::npos) {
+        CompleteRequest();
+      }
     }
   }
 }
 
-bool HttpClient::ParseHttpResponse() {
-  size_t header_end = receive_buffer_.find("\r\n\r\n");
-  if (header_end == std::string::npos) {
-    return false;
-  }
-
-  std::string header_text = receive_buffer_.substr(0, header_end);
-
-  // Parse status line
-  size_t first_line_end = header_text.find("\r\n");
-  if (first_line_end == std::string::npos) {
-    return false;
-  }
-
-  std::string status_line = header_text.substr(0, first_line_end);
-  std::istringstream status_stream(status_line);
-  current_response_ = HttpResponse();
-  std::string http_version;
-  status_stream >> http_version >> current_response_.status_code;
-
-  // Read status message
-  std::string word;
-  current_response_.status_message.clear();
-  while (status_stream >> word) {
-    if (!current_response_.status_message.empty()) {
-      current_response_.status_message += " ";
-    }
-    current_response_.status_message += word;
-  }
-
-  // Parse headers
-  ParseResponseHeaders(header_text.substr(first_line_end + 2));
-
-  // Extract body
-  size_t body_start = header_end + 4;
-  if (body_start < receive_buffer_.length()) {
-    current_response_.body = receive_buffer_.substr(body_start);
-  }
-
-  // Check for content length
-  std::string content_len_str = current_response_.GetHeader("Content-Length");
-  if (!content_len_str.empty()) {
-    content_length_ = std::stoul(content_len_str);
-    current_response_.content_length = content_length_;
-  }
-
-  // Check for chunked encoding
-  std::string transfer_encoding =
-      current_response_.GetHeader("Transfer-Encoding");
-  chunked_encoding_ = (transfer_encoding.find("chunked") != std::string::npos);
-  current_response_.chunked_encoding = chunked_encoding_;
-
-  return true;
-}
+bool HttpClient::ParseHttpResponse() { return current_.headers_received; }
 
 void HttpClient::HandleRedirect() {
-  redirect_count_++;
-  if (!follow_redirects_ || redirect_count_ >= max_redirects_) {
-    HandleError("redirect count exceeded limit");
+  if (!follow_redirects_) {
+    CompleteRequest();
     return;
   }
 
-  std::string location = current_response_.GetHeader("Location");
-  if (!location.empty()) {
-    HttpUrl new_url(current_request_.url);
-    if (location[0] == '/') {
-      new_url.path = location;
-    } else {
-      new_url = HttpUrl(location);
-    }
-    LogI("Redirecting to: %s, %s", new_url.ToString().c_str(),
-         location.c_str());
-    current_request_.url = new_url;
-    if (!new_url.IsValid()) {
-      HandleError("invalid URL");
-      return;
-    }
+  if (current_.redirect_count >= max_redirects_) {
+    HandleError("Too many redirects");
+    return;
+  }
 
-    if (listener_) {
-      listener_->OnRedirect(this, location);
-    }
-    current_request_.url = new_url;
-    // Send new request
-    if (!SendHttpRequest(new_url)) {
-      HandleError("failed to send request");
-    }
+  std::string location = current_.response.GetHeader("Location");
+  if (location.empty()) {
+    HandleError("Redirect response missing Location header");
+    return;
+  }
+
+  if (listener_) {
+    listener_->OnRedirect(this, location);
+  }
+
+  current_.redirect_count++;
+
+  // Parse new URL
+  HttpUrl new_url = current_.request.url.base();
+  if (location[0] == '/') {
+    new_url.path = location;
   } else {
-    CompleteRequest();
+    new_url = HttpUrl(location);
+  }
+  if (!new_url.IsValid()) {
+    HandleError("Invalid redirect URL");
+    return;
+  }
+
+  // Update request URL
+  current_.request.url = new_url;
+
+  // Reset state for new request
+  current_.receive_buffer.clear();
+  current_.headers_received = false;
+  current_.content_length = 0;
+  current_.bytes_received = 0;
+  current_.response = HttpResponse();
+
+  // Disconnect and reconnect
+  if (tcp_client_->IsConnected()) tcp_client_->Disconnect();
+
+  if (listener_) {
+    listener_->OnRedirect(this, location);
+  }
+  current_.request.url = new_url;
+  // Send new request
+  if (!ConnectToHost(new_url)) {
+    HandleError("failed to send request");
   }
 }
 
 void HttpClient::CompleteRequest() {
-  last_response_ = current_response_;
+  last_response_ = current_.response;
 
   // Handle redirects
-  if (current_response_.IsRedirect() && follow_redirects_) {
+  if (current_.response.IsRedirect()) {
     HandleRedirect();
     return;
   }
 
   // Process Set-Cookie headers
-  for (const auto& header : current_response_.headers) {
+  for (const auto& header : current_.response.headers) {
     if (header.name == "Set-Cookie") {
-      ProcessSetCookieHeader(header.value, connected_host_);
+      ProcessSetCookieHeader(header.value, current_.request.url.host);
     }
   }
 
-  // Check if connection can be reused
-  std::string connection = current_response_.GetHeader("Connection");
-  connection_reusable_ =
-      keep_alive_ && (connection != "close") && tcp_client_->IsConnected();
+  // Mark as completed
+  current_.completed.store(true);
 
+  // Notify listener
   if (listener_) {
-    listener_->OnHttpResponse(this, current_response_);
+    listener_->OnHttpResponse(this, current_.response);
   }
 
-  state_ = State::kCompleted;
+  // Notify sync waiters
+  {
+    std::lock_guard<std::mutex> lock(sync_mutex_);
+    sync_cv_.notify_all();
+  }
+
+  // Reset state
+  state_.store(State::kIdle);
 }
 
 void HttpClient::HandleError(const std::string& error) {
-  LogI("%s", error.c_str());
-  state_ = State::kError;
-  connection_reusable_ = false;
+  state_.store(State::kError);
+  current_.response.status_code = 0;
+  current_.response.status_message = error;
+  last_response_ = current_.response;
+
+  current_.completed.store(true);
 
   if (listener_) {
     listener_->OnHttpError(this, error);
   }
 
-  state_ = State::kIdle;
+  // Notify sync waiters
+  {
+    std::lock_guard<std::mutex> lock(sync_mutex_);
+    sync_cv_.notify_all();
+  }
+
+  state_.store(State::kIdle);
 }
 
 bool HttpClient::ConnectToHost(const HttpUrl& url) {
   state_ = State::kConnecting;
-  connected_host_ = url.host;
-  connected_port_ = url.port;
-
-  return tcp_client_->ConnectToHost(url.host, url.port);
+  return tcp_client_->Connect(url.host, url.port);
 }
 
 HttpHeaders HttpClient::MergeHeaders(const HttpHeaders& request_headers) {
   HttpHeaders merged = default_headers_;
 
-  // Add request-specific headers
   for (const auto& header : request_headers) {
-    merged.push_back(header);
+    // Check if header already exists in default headers
+    bool found = false;
+    for (auto& default_header : merged) {
+      if (default_header.name == header.name) {
+        default_header.value = header.value;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      merged.push_back(header);
+    }
   }
 
   return merged;
 }
 
 std::string HttpClient::FormatHeaders(const HttpHeaders& headers) {
-  std::stringstream ss;
+  std::ostringstream oss;
   for (const auto& header : headers) {
-    ss << header.name << ": " << header.value << "\r\n";
+    oss << header.name << ": " << header.value << "\r\n";
   }
-  return ss.str();
+  return oss.str();
 }
 
 void HttpClient::ParseResponseHeaders(const std::string& header_text) {
   std::istringstream stream(header_text);
   std::string line;
 
-  current_response_.headers.clear();
-
-  while (std::getline(stream, line)) {
-    if (line.empty() || line == "\r") {
-      break;
-    }
-
+  // Parse status line
+  if (std::getline(stream, line)) {
     // Remove \r if present
     if (!line.empty() && line.back() == '\r') {
       line.pop_back();
+    }
+
+    // Parse "HTTP/1.1 200 OK"
+    std::istringstream status_line(line);
+    std::string http_version;
+    status_line >> http_version >> current_.response.status_code;
+    std::getline(status_line, current_.response.status_message);
+    // Trim leading space
+    if (!current_.response.status_message.empty() &&
+        current_.response.status_message[0] == ' ') {
+      current_.response.status_message.erase(0, 1);
+    }
+  }
+
+  // Parse headers
+  while (std::getline(stream, line)) {
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+
+    if (line.empty()) {
+      break;
     }
 
     size_t colon_pos = line.find(':');
@@ -572,49 +732,73 @@ void HttpClient::ParseResponseHeaders(const std::string& header_text) {
       std::string name = line.substr(0, colon_pos);
       std::string value = line.substr(colon_pos + 1);
 
-      // Trim whitespace
-      value.erase(0, value.find_first_not_of(" \t"));
-      value.erase(value.find_last_not_of(" \t") + 1);
-
-      current_response_.headers.emplace_back(name, value);
+      value = TrimWhitespace(value);
+      current_.response.headers.emplace_back(name, value);
     }
   }
 }
 
 void HttpClient::ProcessSetCookieHeader(const std::string& cookie_header,
                                         const std::string& domain) {
-  // Simple cookie parsing (production code would be more robust)
+  // Simple cookie parsing: "name=value; other attributes"
   size_t eq_pos = cookie_header.find('=');
-  if (eq_pos != std::string::npos) {
-    std::string name = cookie_header.substr(0, eq_pos);
-
-    size_t semicolon = cookie_header.find(';', eq_pos);
-    std::string value = cookie_header.substr(
-        eq_pos + 1, semicolon == std::string::npos ? std::string::npos
-                                                   : semicolon - eq_pos - 1);
-
-    cookies_[domain][name] = value;
+  if (eq_pos == std::string::npos) {
+    return;
   }
+
+  size_t semicolon_pos = cookie_header.find(';');
+  std::string name = cookie_header.substr(0, eq_pos);
+  std::string value =
+      semicolon_pos != std::string::npos
+          ? cookie_header.substr(eq_pos + 1, semicolon_pos - eq_pos - 1)
+          : cookie_header.substr(eq_pos + 1);
+
+  SetCookie(name, value, domain);
 }
 
 std::string HttpClient::BuildCookieHeader(const std::string& domain) {
-  auto it = cookies_.find(domain);
-  if (it == cookies_.end() || it->second.empty()) {
-    return "";
-  }
-
-  std::stringstream ss;
-  bool first = true;
-
-  for (const auto& cookie : it->second) {
-    if (!first) {
-      ss << "; ";
-    }
-    ss << cookie.first << "=" << cookie.second;
-    first = false;
-  }
-
-  return ss.str();
+  return GetCookies(domain);
 }
 
+std::string HttpClient::GenerateBoundary() {
+  static const char alphanum[] =
+      "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  std::string boundary = "----XTILSFormBoundary";
+  for (int i = 0; i < 16; i++) {
+    boundary += alphanum[rand() % (sizeof(alphanum) - 1)];
+  }
+  return boundary;
+}
+
+size_t HttpClient::CalculateMultipartSize(
+    const std::vector<MultipartField>& fields,
+    const std::vector<MultipartFile>& files, const std::string& boundary) {
+  size_t total_size = 0;
+
+  // Calculate fields size
+  for (const auto& field : fields) {
+    total_size += 2 + boundary.size() + 2;  // --boundary\r\n
+    total_size += 38 + field.name.size() +
+                  4;  // Content-Disposition: form-data; name=""\r\n\r\n
+    total_size += field.value.size() + 2;  // value\r\n
+  }
+
+  // Calculate files size
+  for (const auto& file : files) {
+    total_size += 2 + boundary.size() + 2;  // --boundary\r\n
+    total_size += 38 + file.field_name.size() + 13 + file.filename.size() +
+                  3;  // Content-Disposition header
+    total_size +=
+        14 + file.content_type.size() + 4;  // Content-Type: type\r\n\r\n
+
+    // Get file size
+    total_size += HttpUtils::GetFileSize(file.file_path);
+    total_size += 2;  // \r\n
+  }
+
+  // Final boundary
+  total_size += 2 + boundary.size() + 4;  // --boundary--\r\n
+
+  return total_size;
+}
 }  // namespace xtils
