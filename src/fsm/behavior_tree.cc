@@ -44,14 +44,16 @@ Status Selector::OnTick() {
 }
 
 BtTree::Ptr BtFactory::buildFromJson(const Json& json,
-                                     std::shared_ptr<AnyMap> blackboard) {
+                                     std::shared_ptr<AnyMap> blackboard,
+                                     std::shared_ptr<BtLogger> logger) {
   if (!json.has_key("root")) {
     throw xtils::runtime_error("Node JSON must have a root");
   }
   auto j = json["root"];
 
   auto root = buildNode(j);
-  auto tree = std::make_shared<BtTree>(root, "BehaviorTree", blackboard);
+  auto tree =
+      std::make_shared<BtTree>(root, "BehaviorTree", blackboard, logger);
   return tree;
 }
 
@@ -192,6 +194,7 @@ void Composite::reset() {
 }
 
 Status Node::tick() {
+  Status pre_status = status_;
   if (!started_) {
     started_ = true;
     status_ = OnStart();
@@ -200,6 +203,9 @@ Status Node::tick() {
   if (status_ == Status::Success || status_ == Status::Failure) {
     started_ = false;
     OnStop();
+  }
+  if (record_) {
+    record_->record(*this, pre_status, status_);
   }
   return status_;
 }
@@ -240,19 +246,24 @@ Status Inverter::OnTick() {
 
 // BtTree
 BtTree::BtTree(Node::Ptr root, const std::string& name,
-               std::shared_ptr<AnyMap> blackboard)
-    : root_(root), name_(name) {
+               std::shared_ptr<AnyMap> blackboard,
+               std::shared_ptr<BtLogger> logger)
+    : root_(root), name_(name), logger_(logger) {
   if (blackboard) {
     blackboard_ = blackboard;
   } else {
     blackboard_ = std::make_shared<AnyMap>();
   }
   visit_nodes(root_);
+  if (logger_) {
+    logger_->update(dumpTree());
+  }
 }
 void BtTree::visit_nodes(Node::Ptr& node) {
   nodes_.push_back(node);
   node->id_ = ids_.fetch_add(1);
   node->blackboard_ = blackboard_.get();
+  if (logger_) node->record_ = logger_.get();
   for (auto& child : node->children) {
     visit_nodes(child);
   }

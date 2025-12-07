@@ -1,5 +1,6 @@
 #include <xtils/app/service.h>
 #include <xtils/fsm/behavior_tree.h>
+#include <xtils/fsm/bt_filelogger.h>
 #include <xtils/utils/file_utils.h>
 
 #include <memory>
@@ -116,7 +117,8 @@ class BtService : public xtils::Service {
       LogE("Failed to parse behavior tree JSON");
       return;
     }
-    auto tree = factory.buildFromJson(j.value());
+    auto tree = factory.buildFromJson(
+        j.value(), nullptr, std::make_shared<xtils::BtFileLogger>("./a.log"));
     file_utils::write("./tree.json", tree->dumpTree().dump(2));
     LogI("\n%s", tree->dump().c_str());
     LogI("\n%s", tree->dumpTree().dump(2).c_str());

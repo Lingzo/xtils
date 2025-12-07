@@ -117,6 +117,7 @@ enum class Status { Success = 0, Failure = 1, Running = 2, Idle = 3 };
 enum class Type { Composite = 0, Action = 1, Decorator = 2 };
 class BtTree;
 class BtFactory;
+class BtLogger;
 class Node {
  public:
   using Ptr = std::shared_ptr<Node>;
@@ -130,9 +131,11 @@ class Node {
   virtual void reset();
   Type getType() const { return type_; }
   Status getStatus() const { return status_; }
+  std::string getName() const { return name_; }
+  int getId() const { return id_; }
 
   static Ports getPorts() { return {}; }
-  static std::string desc() { return ""; }
+  static std::string desc() { return {}; }
 
   template <typename T>
   std::optional<T> getInput(const std::string& name) {
@@ -168,6 +171,7 @@ class Node {
   std::vector<Node::Ptr> children;
   AnyMap* blackboard_{nullptr};
   AnyMap data_;
+  BtLogger* record_{nullptr};
 
  private:
   Type type_;
@@ -175,6 +179,12 @@ class Node {
   std::string name_;
   bool started_{false};
   Status status_;
+};
+
+class BtLogger {
+ public:
+  virtual void update(const Json& tree) {}
+  virtual void record(const Node&, Status from, Status to) {}
 };
 
 // Composite nodes
@@ -263,7 +273,8 @@ class BtTree {
  public:
   using Ptr = std::shared_ptr<BtTree>;
   explicit BtTree(Node::Ptr root, const std::string& name = "",
-                  std::shared_ptr<AnyMap> blackboard = nullptr);
+                  std::shared_ptr<AnyMap> blackboard = nullptr,
+                  std::shared_ptr<BtLogger> logger = nullptr);
   // no copy/move
   BtTree(const BtTree&) = delete;
   BtTree& operator=(const BtTree&) = delete;
@@ -290,6 +301,7 @@ class BtTree {
   std::string name_;
   std::vector<Node::Ptr> nodes_;
   std::shared_ptr<AnyMap> blackboard_;
+  std::shared_ptr<BtLogger> logger_;
 };
 
 // Factory / builder that parses JSON and constructs nodes.
@@ -319,7 +331,8 @@ class BtFactory {
   }
   // Build tree from json
   BtTree::Ptr buildFromJson(const Json& j,
-                            std::shared_ptr<AnyMap> blackboard = nullptr);
+                            std::shared_ptr<AnyMap> blackboard = nullptr,
+                            std::shared_ptr<BtLogger> logger = nullptr);
   std::string dump() const;
 
  private:
