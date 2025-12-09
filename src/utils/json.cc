@@ -734,7 +734,10 @@ void dump_string(const std::string& str, std::string& out) {
 }
 
 void dump_value(const Json& json, std::string& out, int depth, int indent) {
-  std::string indent_str(indent * depth, ' ');
+  const std::string indent_str(indent * depth, ' ');
+  const std::string new_line = indent > 0 ? "\n" : "";
+  const std::string comma = indent > 0 ? ",\n" : ",";
+  const std::string colon = indent > 0 ? ": " : ":";
   if (json.is_null()) {
     out.append("null");
   } else if (json.is_bool()) {
@@ -746,20 +749,20 @@ void dump_value(const Json& json, std::string& out, int depth, int indent) {
   } else if (json.is_string()) {
     dump_string(json.as_string(), out);
   } else if (json.is_array()) {
-    out.append("[");
     const auto& arr = json.as_array();
+    out.append("[");
     if (!arr.empty()) {
-      out.append("\n");
+      out.append(new_line);
       bool first = true;
       for (const auto& val : arr) {
         if (!first) {
-          out.append(",\n");
+          out.append(comma);
         }
         out.append(indent_str);
         dump_value(val, out, depth + 1, indent);
         first = false;
       }
-      out.append("\n");
+      out.append(new_line);
       out.append(indent_str.substr(0, indent_str.size() - indent));
     }
     out.append("]");
@@ -767,19 +770,19 @@ void dump_value(const Json& json, std::string& out, int depth, int indent) {
     const auto& obj = json.as_object();
     out.append("{");
     if (!obj.empty()) {
-      out.append("\n");
+      out.append(new_line);
       bool first = true;
       for (const auto& [k, v] : obj) {
         if (!first) {
-          out.append(",\n");
+          out.append(comma);
         }
         out.append(indent_str);
         dump_string(k, out);
-        out.append(": ");
+        out.append(colon);
         dump_value(v, out, depth + 1, indent);
         first = false;
       }
-      out.append("\n");
+      out.append(new_line);
       out.append(indent_str.substr(0, indent_str.size() - indent));
     }
     out.append("}");
