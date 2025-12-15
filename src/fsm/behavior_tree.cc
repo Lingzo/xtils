@@ -50,10 +50,10 @@ BtTree::Ptr BtFactory::buildFromJson(const Json& json,
     throw xtils::runtime_error("Node JSON must have a root");
   }
   auto j = json["root"];
+  auto tree_name = json.get_string("name").value_or("BehaviorTree");
 
   auto root = buildNode(j);
-  auto tree =
-      std::make_shared<BtTree>(root, "BehaviorTree", blackboard, logger);
+  auto tree = std::make_shared<BtTree>(root, tree_name, blackboard, logger);
   return tree;
 }
 
@@ -286,6 +286,8 @@ std::string BtTree::dump() {
 xtils::Json BtTree::dumpTree() {
   Json json;
   json["root"] = dump_tree_node(*root_);
+  json["name"] = name_;
+  json["version"] = "1.0";
   return json;
 }
 
