@@ -47,7 +47,7 @@ void App::default_config() {
       .define("xtils.inspect.addr", "inspect address", "0.0.0.0")
       .define("xtils.inspect.cors", "inspect cross addr", "*")
       .define("xtils.log.file.name", "log file name,default in current dir",
-              "./app.log")
+              "./log/app.log")
       .define("xtils.log.file.max_bytes", "log file size, default 4M",
               4 * 1024 * 1024)
       .define("xtils.log.file.max_items", "max file number, app.max.log", 5)

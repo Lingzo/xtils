@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -22,7 +23,7 @@ namespace xtils {
 namespace system {
 
 std::atomic<bool> SignalHandler::shutdown_requested_{false};
-SignalHandler::ShutdownCallback SignalHandler::shutdown_callback_;
+std::list<SignalHandler::ShutdownCallback> SignalHandler::shutdown_cbs_{};
 bool SignalHandler::initialized_{false};
 
 std::string GetStackTrace() {
@@ -45,7 +46,7 @@ std::string GetStackTrace() {
   }
 
   for (int i = 0; i < frame_count; ++i) {
-    ss << "  [" << i << "] ";
+    ss << "  [" << std::left << std::setw(2) << i << "] ";
 
     // Try to demangle C++ function names
     std::string symbol_str(symbols[i]);
@@ -92,8 +93,7 @@ void SignalHandler::Initialize(ShutdownCallback callback) {
   if (initialized_) {
     return;
   }
-
-  shutdown_callback_ = callback;
+  if (callback) shutdown_cbs_.emplace_back(callback);
   shutdown_requested_.store(false);
 
   struct sigaction sa_shutdown;
@@ -131,6 +131,8 @@ void SignalHandler::Initialize(ShutdownCallback callback) {
   sigaction(SIGILL, &sa_crash, nullptr);
 #endif
 
+  signal(SIGPIPE, SIG_IGN);  // avoid pipe error signal, handler by programs
+
   initialized_ = true;
 }
 
@@ -159,7 +161,9 @@ void SignalHandler::Cleanup() {
   signal(SIGILL, SIG_DFL);
 #endif
 
-  shutdown_callback_ = nullptr;
+  signal(SIGPIPE, SIG_DFL);
+
+  shutdown_cbs_.clear();
   initialized_ = false;
 }
 
@@ -172,16 +176,16 @@ void SignalHandler::HandleShutdownSignal(int sig, siginfo_t* info,
   shutdown_requested_.store(true);
   signal(sig, SIG_DFL);  // avoid call again
 
-  if (shutdown_callback_) {
-    shutdown_callback_();
+  for (auto& cb : shutdown_cbs_) {
+    cb();
   }
 }
 
 void SignalHandler::Shutdown() {
   LogW("shutdown by user");
   shutdown_requested_.store(true);
-  if (shutdown_callback_) {
-    shutdown_callback_();
+  for (auto& cb : shutdown_cbs_) {
+    cb();
   }
 }
 

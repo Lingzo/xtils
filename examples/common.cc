@@ -2,7 +2,7 @@
 #include <xtils/logging/logger.h>
 
 int main(int argc, char* argv[]) {
-  xtils::init({argv, argv + argc});
+  xtils::init(argc, argv);
   xtils::run_daemon();
   while (xtils::isOk()) {
     LogThis();

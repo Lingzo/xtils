@@ -51,6 +51,13 @@ bool isOk();
  * @param args command line arguments
  */
 void init(const std::vector<std::string>& args);
+
+/**
+ * @brief init the global context for backward
+ * @param argc number of argv
+ * @param argv params const char*
+ */
+void init(int argc, const char* const argv[]);
 /**
  * @brief wait until resource released
  */

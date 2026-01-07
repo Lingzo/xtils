@@ -17,6 +17,8 @@ __attribute__((weak)) void app_main(xtils::App& ctx,
 namespace xtils {
 void init(const std::vector<std::string>& args) { App::ins()->init(args); }
 
+void init(int argc, const char* const argv[]) { init({argv, argv + argc}); }
+
 void run_forever() { App::ins()->run(); }
 void run_daemon() { App::ins()->run_daemon(); }
 

@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <functional>
+#include <list>
 #include <string>
 
 namespace xtils {
@@ -22,8 +23,10 @@ class SignalHandler {
 
   // Cleanup and restore default signal handlers
   static void Cleanup();
-  
+
   static void Shutdown();
+
+  static void AddShutdownCallback(ShutdownCallback cb);
 
  private:
   // Signal handler function for graceful shutdown signals
@@ -36,7 +39,7 @@ class SignalHandler {
   static const char* GetSignalName(int sig);
 
   static std::atomic<bool> shutdown_requested_;
-  static ShutdownCallback shutdown_callback_;
+  static std::list<ShutdownCallback> shutdown_cbs_;
   static bool initialized_;
 };
 
