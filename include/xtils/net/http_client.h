@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "transport/transport.h"
 #include "xtils/net/http_common.h"
 #include "xtils/net/tcp_client.h"
 #include "xtils/tasks/task_runner.h"
@@ -252,7 +253,7 @@ class HttpClient : public TcpClientEventListener {
 
   TaskRunner* task_runner_;
   HttpClientEventListener* listener_;
-  std::unique_ptr<TcpClient> tcp_client_;
+  std::unique_ptr<Transport> transport_;
   std::atomic<State> state_;
 
   // Current request state

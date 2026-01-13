@@ -6,10 +6,24 @@ option(INSPECT_DISABLE "Disable inspect module" OFF)
 option(BUILD_TESTS "Build tests" OFF)
 option(BUILD_EXAMPLES "Build examples" OFF)
 option(BUILD_WITH_SANITIZERS "Build with sanitizers" OFF)
+option(USE_MBEDTLS "Use mbedTLS instead of OpenSSL" OFF)
+option(USE_OPENSSL "Use OpenSSL instead of mbedTLS" TRUE)
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/xtils-autogen.cmake)
 
 file(GLOB_RECURSE SRCS src/*.cc)
+
+if(USE_OPENSSL)
+# Find optional OpenSSL
+find_package(OpenSSL REQUIRED)
+endif()
+
+if(USE_MBEDTLS)
+# Find mbedTLS libraries
+find_package(MbedTLS REQUIRED)
+endif()
+
+
 # Create a single library
 add_library(xtils STATIC ${SRCS})
 target_include_directories(xtils PUBLIC
@@ -35,6 +49,21 @@ target_link_options(xtils PUBLIC
     $<$<CONFIG:Debug>:-rdynamic -Wl,--as-needed -Wl,--gc-sections>
     $<$<CONFIG:Release>:-rdynamic -Wl,--as-needed -Wl,--gc-sections>
     $<$<CONFIG:RelWithDebInfo>:-rdynamic -Wl,--as-needed -Wl,--gc-sections>)
+
+# Let the project use SSL/TLS, prioritize OpenSSL when available.
+if(OpenSSL_FOUND)
+    message(STATUS "OpenSSL found: Using OpenSSL for SSL/TLS")
+    target_compile_definitions(xtils PUBLIC USE_OPENSSL)
+    target_include_directories(xtils PUBLIC ${OPENSSL_INCLUDE_DIR})
+    target_link_libraries(xtils PUBLIC OpenSSL::SSL)
+elseif(MbedTLS_FOUND)
+    message(STATUS "OpenSSL not found: Using mbedTLS")
+    target_compile_definitions(xtils PUBLIC USE_MBEDTLS)
+    target_include_directories(xtils PUBLIC ${MBEDTLS_INCLUDE_DIRS})
+    target_link_libraries(xtils PUBLIC MbedTLS::mbedtls MbedTLS::mbedx509 MbedTLS::mbedcrypto)
+else()
+    message(FATAL_ERROR "No SSL/TLS library found: install OpenSSL or mbedTLS")
+endif()
 
 if(BUILD_WITH_SANITIZERS)
     target_compile_options(xtils PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)

@@ -100,9 +100,7 @@ int main(int argc, char** argv) {
     LogI("Status: %d %s", response.status_code,
          response.status_message.c_str());
     LogI("Body length: %zu bytes", response.body.length());
-    if (response.body.length() < 1024) {
-      printf("\n%s\n", response.body.c_str());
-    }
+    printf("\n%s\n", response.body.c_str());
 
   } else if (command == "post") {
     // POST request

@@ -35,7 +35,8 @@ bool TcpClient::Connect(const std::string& address, uint16_t port) {
     family = SockFamily::kInet;
   }
 
-  std::string socket_addr = ss.str();
+  std::string socket_addr =
+      ss.str();  // support both IPv4 and IPv6 and hostnames
 
   socket_ = UnixSocket::Connect(socket_addr, this, task_runner_, family,
                                 SockType::kStream);
@@ -50,9 +51,8 @@ bool TcpClient::Connect(const std::string& address, uint16_t port) {
 }
 
 bool TcpClient::ConnectToHost(const std::string& hostname, uint16_t port) {
-  // TODO: Implement hostname resolution and connection logic
-  std::string address = hostname;
-  return Connect(address, port);
+  return Connect(hostname,
+                 port);  // Reuse the Connect method for hostname resolution
 }
 
 void TcpClient::Disconnect() {
@@ -150,7 +150,11 @@ void TcpClient::OnDataAvailable(UnixSocket* self) {
   if (state_ != State::kConnected || !listener_) {
     return;
   }
-
+  if (listener_) {
+    if (listener_->OnReadable()) {  // Let listener handle reading
+      return;
+    }
+  }
   // Read available data
   constexpr size_t kBufferSize = 8192;
   uint8_t buffer[kBufferSize];

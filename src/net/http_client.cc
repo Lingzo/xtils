@@ -2,7 +2,10 @@
 
 #include <sstream>
 
+#include "xtils/logging/logger.h"
 #include "xtils/net/http_common.h"
+#include "xtils/net/transport/plain_tcp_transport.h"
+#include "xtils/net/transport/tls_transport.h"
 #include "xtils/utils/string_utils.h"
 
 namespace xtils {
@@ -71,7 +74,6 @@ HttpClient::HttpClient(TaskRunner* task_runner,
       max_receive_buffer_size_(100 * 1024 * 1024),
       streaming_mode_(false),
       connection_reusable_(false) {
-  tcp_client_ = std::make_unique<TcpClient>(task_runner_, this);
   SetUserAgent("xtils-http-client/1.0");
 }
 
@@ -209,8 +211,8 @@ bool HttpClient::PostMultipartAsync(const std::string& url,
 }
 
 void HttpClient::Cancel() {
-  if (tcp_client_) {
-    tcp_client_->Disconnect();
+  if (transport_) {
+    transport_->Close();
   }
   state_.store(State::kIdle);
   current_.Reset();
@@ -385,7 +387,7 @@ std::string HttpClient::BuildHttpRequest(const HttpRequest& request) {
 bool HttpClient::SendHttpRequest(const HttpRequest& request) {
   std::string request_text = BuildHttpRequest(request);
 
-  if (!tcp_client_->Send(request_text.data(), request_text.size())) {
+  if (!transport_->Send(request_text.data(), request_text.size())) {
     return false;
   }
 
@@ -410,7 +412,7 @@ bool HttpClient::SendMultipartBody(const HttpRequest& request) {
     part << field.value << "\r\n";
 
     std::string part_str = part.str();
-    if (!tcp_client_->Send(part_str.data(), part_str.size())) {
+    if (!transport_->Send(part_str.data(), part_str.size())) {
       return false;
     }
     current_.bytes_sent += part_str.size();
@@ -427,7 +429,7 @@ bool HttpClient::SendMultipartBody(const HttpRequest& request) {
     part_header << "Content-Type: " << file.content_type << "\r\n\r\n";
 
     std::string header_str = part_header.str();
-    if (!tcp_client_->Send(header_str.data(), header_str.size())) {
+    if (!transport_->Send(header_str.data(), header_str.size())) {
       return false;
     }
     current_.bytes_sent += header_str.size();
@@ -438,7 +440,7 @@ bool HttpClient::SendMultipartBody(const HttpRequest& request) {
       return false;
     }
 
-    if (!tcp_client_->Send(file_content.data(), file_content.size())) {
+    if (!transport_->Send(file_content.data(), file_content.size())) {
       return false;
     }
     current_.bytes_sent += file_content.size();
@@ -450,7 +452,7 @@ bool HttpClient::SendMultipartBody(const HttpRequest& request) {
 
     // Send trailing CRLF
     const char* crlf = "\r\n";
-    if (!tcp_client_->Send(crlf, 2)) {
+    if (!transport_->Send(crlf, 2)) {
       return false;
     }
     current_.bytes_sent += 2;
@@ -458,7 +460,7 @@ bool HttpClient::SendMultipartBody(const HttpRequest& request) {
 
   // Send final boundary
   std::string final_boundary = "--" + boundary + "--\r\n";
-  if (!tcp_client_->Send(final_boundary.data(), final_boundary.size())) {
+  if (!transport_->Send(final_boundary.data(), final_boundary.size())) {
     return false;
   }
   current_.bytes_sent += final_boundary.size();
@@ -522,19 +524,11 @@ void HttpClient::ProcessReceivedData(const void* data, size_t len) {
 
     // Check if response is complete
     if (!current_.chunked_encoding) {
-      if (current_.content_length > 0) {
+      if (current_.content_length >= 0) {
         if (current_.response.body.size() >= current_.content_length) {
           // Response complete
           CompleteRequest();
         }
-      } else if (current_.response.status_code >= 100 &&
-                 current_.response.status_code < 200) {
-        // 1xx responses don't have body
-        CompleteRequest();
-      } else if (current_.response.status_code == 204 ||
-                 current_.response.status_code == 304) {
-        // No content responses
-        CompleteRequest();
       }
     } else {
       // Handle chunked encoding - simplified
@@ -581,6 +575,7 @@ void HttpClient::HandleRedirect() {
     HandleError("Invalid redirect URL");
     return;
   }
+  LogI("Redirecting to: %s", new_url.ToString().c_str());
 
   // Update request URL
   current_.request.url = new_url;
@@ -593,7 +588,7 @@ void HttpClient::HandleRedirect() {
   current_.response = HttpResponse();
 
   // Disconnect and reconnect
-  if (tcp_client_->IsConnected()) tcp_client_->Disconnect();
+  if (transport_) transport_->Close();
 
   if (listener_) {
     listener_->OnRedirect(this, location);
@@ -662,7 +657,25 @@ void HttpClient::HandleError(const std::string& error) {
 
 bool HttpClient::ConnectToHost(const HttpUrl& url) {
   state_ = State::kConnecting;
-  return tcp_client_->Connect(url.host, url.port);
+
+  if (url.scheme == "https") {
+    transport_ = std::make_unique<TlsTransport>(task_runner_);
+  } else {  // default to plain TCP
+    transport_ = std::make_unique<PlainTcpTransport>(task_runner_);
+  }
+  transport_->SetOnConnected(
+      [this](bool success) { OnConnected(nullptr, success); });
+  transport_->SetOnData([this](const void* data, size_t len) {
+    OnDataReceived(nullptr, data, len);
+  });
+  transport_->SetOnDisconnected([this]() { OnDisconnected(nullptr); });
+  transport_->SetOnError(
+      [this](const std::string& error) { OnError(nullptr, error); });
+  TlsCertConfig cfg;
+  cfg.ca_file = "/etc/ssl/certs/ca-certificates.crt";
+  cfg.verify_peer = true;
+  auto tls = OpenSslContext::Create(cfg);
+  return transport_->Connect(url, tls);
 }
 
 HttpHeaders HttpClient::MergeHeaders(const HttpHeaders& request_headers) {

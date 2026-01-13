@@ -26,6 +26,8 @@ class TcpClientEventListener {
   // Called when connection is lost or closed
   virtual void OnDisconnected(TcpClient* client) = 0;
 
+  virtual bool OnReadable() { return false; }
+
   // Called when client encounters an error
   virtual void OnError(TcpClient* client, const std::string& error) {}
 };
