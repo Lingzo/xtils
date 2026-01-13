@@ -50,6 +50,7 @@ void TlsTransport::OnConnected(TcpClient*, bool success) {
   int flags = fcntl(fd, F_GETFL, 0);
   fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
   SSL_set_fd(ssl_, tcp_->GetSocketFd());
+  // LogI("host: %s", host_.c_str());
   SSL_set_tlsext_host_name(ssl_, host_.c_str());
   SSL_set_connect_state(ssl_);
 
@@ -65,11 +66,41 @@ void TlsTransport::ContinueHandshake() {
     if (on_connected_) on_connected_(true);
     return;
   }
+  int ssl_err = SSL_get_error(ssl_, ret);
 
-  char reason[256];
-  unsigned long e = ERR_get_error();
-  ERR_error_string_n(e, reason, sizeof(reason));
-  Fail(reason);
+  switch (ssl_err) {
+    case SSL_ERROR_WANT_READ:
+      // LogI("SSL_ERROR_WANT_READ");
+      return;
+
+    case SSL_ERROR_WANT_WRITE:
+      //  LogI("SSL_ERROR_WANT_WRITE");
+      return;
+
+    case SSL_ERROR_ZERO_RETURN:
+      Fail("TLS closed by peer");
+      return;
+
+    case SSL_ERROR_SYSCALL:
+      perror("SSL syscall error");
+      Fail("TLS syscall error");
+      return;
+
+    case SSL_ERROR_SSL: {
+      unsigned long e;
+      char buf[256];
+      while ((e = ERR_get_error()) != 0) {
+        ERR_error_string_n(e, buf, sizeof(buf));
+        // LogI("SSL_ERROR_SSL: %s", buf);
+      }
+      Fail("TLS protocol error");
+      return;
+    }
+
+    default:
+      Fail("Unknown TLS error");
+      return;
+  }
 }
 
 void TlsTransport::OnDataReceived(TcpClient*, const void*, size_t) {

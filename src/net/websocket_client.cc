@@ -3,7 +3,10 @@
 #include <cstring>
 #include <sstream>
 
+#include "xtils/logging/logger.h"
 #include "xtils/net/http_common.h"
+#include "xtils/net/transport/plain_tcp_transport.h"
+#include "xtils/net/transport/tls_transport.h"
 #include "xtils/net/websocket_common.h"
 
 namespace xtils {
@@ -18,7 +21,6 @@ WebSocketClient::WebSocketClient(TaskRunner* task_runner,
                                  WebSocketClientEventListener* listener)
     : task_runner_(task_runner),
       listener_(listener),
-      tcp_client_(std::make_unique<TcpClient>(task_runner, this)),
       state_(State::kDisconnected),
       frame_bytes_needed_(0),
       frame_parsing_header_(true),
@@ -30,7 +32,9 @@ WebSocketClient::WebSocketClient(TaskRunner* task_runner,
       reconnect_delay_ms_(5000),
       close_sent_(false),
       close_code_(0),
-      handshake_completed_(false) {}
+      handshake_completed_(false),
+      verify_ssl_(true),
+      ssl_cert_path_() {}
 
 WebSocketClient::~WebSocketClient() {
   StopPingTimer();
@@ -59,16 +63,6 @@ bool WebSocketClient::Connect(const std::string& url,
   HttpUrl parsed_url(url);
   if (!parsed_url.IsValid()) {
     HandleError("Invalid WebSocket URL: " + url);
-    return false;
-  }
-
-  // Convert ws/wss to http/https
-  if (parsed_url.scheme == "ws") {
-    parsed_url.scheme = "http";
-  } else if (parsed_url.scheme == "wss") {
-    parsed_url.scheme = "https";
-  } else if (parsed_url.scheme != "http" && parsed_url.scheme != "https") {
-    HandleError("Unsupported WebSocket scheme: " + parsed_url.scheme);
     return false;
   }
 
@@ -118,14 +112,39 @@ bool WebSocketClient::Connect(const std::string& url,
   handshake_request_ = request_stream.str();
 
   SetState(State::kConnecting);
-
+  if (parsed_url.IsHttps()) {
+    transport_ = std::make_unique<TlsTransport>(task_runner_);
+  } else {
+    transport_ = std::make_unique<PlainTcpTransport>(task_runner_);
+  }
+  transport_->SetOnConnected(
+      [this](bool success) { OnConnected(nullptr, true); });
+  transport_->SetOnDisconnected([this]() { OnDisconnected(nullptr); });
+  transport_->SetOnData([this](const void* data, size_t len) {
+    OnDataReceived(nullptr, data, len);
+  });
+  transport_->SetOnError(
+      [this](const std::string& error) { OnError(nullptr, error); });
+  TlsCertConfig cfg = TlsCertConfig::Default();
+  if (!verify_ssl_) {
+    cfg = TlsCertConfig::Insecure();
+  } else if (!ssl_cert_path_.empty()) {
+    cfg.cert_file = ssl_cert_path_;
+  }
+  ctx_ = OpenSslContext::Create(cfg);
   // Connect to server
-  if (!tcp_client_->ConnectToHost(parsed_url.host, parsed_url.port)) {
+  if (!transport_->Connect(parsed_url, ctx_)) {
     HandleError("Failed to initiate TCP connection");
     return false;
   }
 
   return true;
+}
+
+void WebSocketClient::SetVerifySSL(bool verify) { verify_ssl_ = verify; }
+
+void WebSocketClient::SetSSLCertificate(const std::string& cert_path) {
+  ssl_cert_path_ = cert_path;
 }
 
 bool WebSocketClient::SendText(const std::string& text) {
@@ -192,8 +211,8 @@ void WebSocketClient::Disconnect() {
     SendClose();
   }
 
-  if (tcp_client_) {
-    tcp_client_->Disconnect();
+  if (transport_) {
+    transport_->Close();
   }
 
   SetState(State::kDisconnected);
@@ -235,7 +254,7 @@ void WebSocketClient::OnConnected(TcpClient* client, bool success) {
   SetState(State::kHandshaking);
 
   // Send HTTP upgrade request
-  if (!tcp_client_->SendString(handshake_request_)) {
+  if (!transport_->Send(handshake_request_.data(), handshake_request_.size())) {
     HandleError("Failed to send WebSocket handshake request");
     return;
   }
@@ -553,13 +572,13 @@ bool WebSocketClient::SendWebSocketFrame(WebSocketOpcode opcode,
     return false;
   }
 
-  if (!tcp_client_ || !tcp_client_->IsConnected()) {
+  if (!transport_) {
     return false;
   }
 
   auto frame_data =
       WebSocketUtils::BuildFrame(opcode, payload, payload_len, fin, true);
-  return tcp_client_->Send(frame_data.data(), frame_data.size());
+  return transport_->Send(frame_data.data(), frame_data.size());
 }
 
 void WebSocketClient::SetState(State new_state) {
@@ -600,14 +619,11 @@ void WebSocketClient::StopPingTimer() {
 }
 
 void WebSocketClient::ScheduleReconnect() {
-  if (!auto_reconnect_) {
-    return;
-  }
-  if (!tcp_client_) {
-    return;
-  }
+  if (!auto_reconnect_) return;
+
+  if (transport_) transport_->Close();
+
   SetState(State::kClosed);
-  tcp_client_->Disconnect();
   task_runner_->PostDelayedTask(
       [this]() {
         Connect(websocket_url_, connect_headers_, requested_protocols_);

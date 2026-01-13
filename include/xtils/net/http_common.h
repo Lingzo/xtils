@@ -75,7 +75,7 @@ struct HttpUrl {
     base_url.fragment.clear();
     return base_url;
   }
-  bool IsHttps() const { return scheme == "https"; }
+  bool IsHttps() const { return scheme == "https" || scheme == "wss"; }
   bool IsValid() const { return !host.empty() && !scheme.empty(); }
   bool isSameHost(const HttpUrl& other) const {
     return host == other.host && port == other.port;

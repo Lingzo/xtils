@@ -71,10 +71,11 @@ HttpClient::HttpClient(TaskRunner* task_runner,
       max_redirects_(5),
       keep_alive_(true),
       verify_ssl_(true),
+      ssl_cert_path_(),
       max_receive_buffer_size_(100 * 1024 * 1024),
       streaming_mode_(false),
       connection_reusable_(false) {
-  SetUserAgent("xtils-http-client/1.0");
+  SetUserAgent("xtils/1.0");
 }
 
 HttpClient::~HttpClient() { Cancel(); }
@@ -103,7 +104,7 @@ HttpResponse HttpClient::Request(const HttpRequest& request) {
     return timeout_response;
   }
 
-  return last_response_;
+  return current_.response;
 }
 
 bool HttpClient::RequestAsync(const HttpRequest& request) {
@@ -274,8 +275,7 @@ std::string HttpClient::GetCookies(const std::string& domain) const {
 void HttpClient::SetVerifySSL(bool verify) { verify_ssl_ = verify; }
 
 void HttpClient::SetSSLCertificate(const std::string& cert_path) {
-  // TODO: Implement SSL certificate loading
-  (void)cert_path;
+  ssl_cert_path_ = cert_path;
 }
 
 // TcpClientEventListener implementation
@@ -575,7 +575,7 @@ void HttpClient::HandleRedirect() {
     HandleError("Invalid redirect URL");
     return;
   }
-  LogI("Redirecting to: %s", new_url.ToString().c_str());
+  LogD("Redirecting to: %s", new_url.ToString().c_str());
 
   // Update request URL
   current_.request.url = new_url;
@@ -658,7 +658,7 @@ void HttpClient::HandleError(const std::string& error) {
 bool HttpClient::ConnectToHost(const HttpUrl& url) {
   state_ = State::kConnecting;
 
-  if (url.scheme == "https") {
+  if (url.IsHttps()) {
     transport_ = std::make_unique<TlsTransport>(task_runner_);
   } else {  // default to plain TCP
     transport_ = std::make_unique<PlainTcpTransport>(task_runner_);
@@ -671,9 +671,12 @@ bool HttpClient::ConnectToHost(const HttpUrl& url) {
   transport_->SetOnDisconnected([this]() { OnDisconnected(nullptr); });
   transport_->SetOnError(
       [this](const std::string& error) { OnError(nullptr, error); });
-  TlsCertConfig cfg;
-  cfg.ca_file = "/etc/ssl/certs/ca-certificates.crt";
-  cfg.verify_peer = true;
+  TlsCertConfig cfg = TlsCertConfig::Default();
+  if (!verify_ssl_) {
+    cfg = TlsCertConfig::Insecure();
+  } else if (!ssl_cert_path_.empty()) {
+    cfg.cert_file = ssl_cert_path_;
+  }
   auto tls = OpenSslContext::Create(cfg);
   return transport_->Connect(url, tls);
 }

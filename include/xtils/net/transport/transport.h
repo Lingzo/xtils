@@ -22,6 +22,18 @@ struct TlsCertConfig {
     return std::tie(cert_file, key_file, ca_file) <
            std::tie(o.cert_file, o.key_file, o.ca_file);
   }
+
+  static TlsCertConfig Default() {
+    TlsCertConfig cfg;
+    cfg.ca_file = "/etc/ssl/certs/ca-certificates.crt";
+    cfg.verify_peer = true;
+    return cfg;
+  }
+  static TlsCertConfig Insecure() {
+    TlsCertConfig cfg;
+    cfg.verify_peer = false;
+    return cfg;
+  }
 };
 
 class TlsContext {

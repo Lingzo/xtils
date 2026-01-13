@@ -97,11 +97,11 @@ int main(int argc, char** argv) {
     // Simple GET request
     HttpClient client(&task_runner);
     auto response = client.Get(url);
-    LogI("Status: %d %s", response.status_code,
+    LogI("Status: %d, %s", response.status_code,
          response.status_message.c_str());
     LogI("Body length: %zu bytes", response.body.length());
-    printf("\n%s\n", response.body.c_str());
-
+    auto s = response.body.substr(0, 100);
+    LogI("Body:\n%s", s.c_str());
   } else if (command == "post") {
     // POST request
     if (argc < 4) {

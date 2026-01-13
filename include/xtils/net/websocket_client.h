@@ -10,6 +10,7 @@
 #include "xtils/net/http_client.h"
 #include "xtils/net/http_common.h"
 #include "xtils/net/tcp_client.h"
+#include "xtils/net/transport/transport.h"
 #include "xtils/net/websocket_common.h"
 #include "xtils/tasks/task_runner.h"
 
@@ -105,6 +106,9 @@ class WebSocketClient : public HttpClientEventListener,
   std::string GetUrl() const { return websocket_url_; }
   std::string GetProtocol() const { return selected_protocol_; }
 
+  void SetVerifySSL(bool verify);
+  void SetSSLCertificate(const std::string& cert_path);
+
  private:
   // HttpClientEventListener implementation
   void OnHttpResponse(HttpClient* client,
@@ -140,7 +144,8 @@ class WebSocketClient : public HttpClientEventListener,
   // Connection state
   TaskRunner* task_runner_;
   WebSocketClientEventListener* listener_;
-  std::unique_ptr<TcpClient> tcp_client_;
+  std::unique_ptr<Transport> transport_;
+  TlsContextPtr ctx_;
   State state_;
 
   // WebSocket connection info
@@ -176,6 +181,9 @@ class WebSocketClient : public HttpClientEventListener,
 
   // Auto-ping support
   std::atomic_int ping_timer_id_;
+
+  bool verify_ssl_;
+  std::string ssl_cert_path_;
 };
 
 }  // namespace xtils

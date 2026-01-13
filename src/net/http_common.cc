@@ -102,12 +102,11 @@ std::string HttpUrl::ToString() const {
 }
 
 uint16_t HttpUrl::GetDefaultPort() const {
-  if (scheme == "https") {
+  if (IsHttps()) {
     return 443;
-  } else if (scheme == "http") {
-    return 80;
+  } else {
+    return 80;  // Default to HTTP
   }
-  return 80;  // Default to HTTP
 }
 
 // HttpUtils implementation

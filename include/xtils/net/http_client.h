@@ -159,7 +159,6 @@ class HttpClient : public TcpClientEventListener {
   void ClearCookies();
   std::string GetCookies(const std::string& domain = "") const;
 
-  // SSL/TLS support (placeholder for future implementation)
   void SetVerifySSL(bool verify);
   void SetSSLCertificate(const std::string& cert_path);
 
@@ -266,9 +265,11 @@ class HttpClient : public TcpClientEventListener {
   bool follow_redirects_;
   int max_redirects_;
   bool keep_alive_;
-  bool verify_ssl_;
   size_t max_receive_buffer_size_;
   bool streaming_mode_;
+
+  bool verify_ssl_;
+  std::string ssl_cert_path_;
 
   // Cookie storage: domain -> cookies
   std::map<std::string, std::map<std::string, std::string>> cookies_;
