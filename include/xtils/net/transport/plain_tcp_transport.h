@@ -11,7 +11,8 @@ class TaskRunner;
 class PlainTcpTransport final : public Transport,
                                 public TcpClientEventListener {
  public:
-  explicit PlainTcpTransport(TaskRunner* runner);
+  explicit PlainTcpTransport(TaskRunner* runner,
+                             TransportEventListener* listener);
   ~PlainTcpTransport() override;
 
   // Transport
@@ -21,10 +22,10 @@ class PlainTcpTransport final : public Transport,
 
  private:
   // TcpClientEventListener
-  void OnConnected(TcpClient* client, bool success) override;
-  void OnDataReceived(TcpClient* client, const void* data, size_t len) override;
-  void OnDisconnected(TcpClient* client) override;
-  void OnError(TcpClient* client, const std::string& error) override;
+  void OnConnected(bool success) override;
+  void OnDataReceived(const void* data, size_t len) override;
+  void OnDisconnected() override;
+  void OnError(const std::string& error) override;
 
  private:
   TaskRunner* runner_;

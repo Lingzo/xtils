@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
 
   if (command == "get") {
     // Simple GET request
-    HttpClient client(&task_runner);
+    HttpClient client(&task_runner, nullptr);
     auto response = client.Get(url);
     LogI("Status: %d, %s", response.status_code,
          response.status_message.c_str());
@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
       return 1;
     }
     std::string data = argv[3];
-    HttpClient client(&task_runner);
+    HttpClient client(&task_runner, nullptr);
     auto response = client.PostJson(url, data);
     LogI("Status: %d %s", response.status_code,
          response.status_message.c_str());

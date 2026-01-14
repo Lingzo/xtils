@@ -100,7 +100,7 @@ class HttpClientEventListener {
   }
 };
 
-class HttpClient : public TcpClientEventListener {
+class HttpClient : public TransportEventListener {
  public:
   enum class State {
     kIdle = 0,
@@ -175,10 +175,10 @@ class HttpClient : public TcpClientEventListener {
 
  private:
   // TcpClientEventListener implementation
-  void OnConnected(TcpClient* client, bool success) override;
-  void OnDataReceived(TcpClient* client, const void* data, size_t len) override;
-  void OnDisconnected(TcpClient* client) override;
-  void OnError(TcpClient* client, const std::string& error) override;
+  void OnConnected(bool success) override;
+  void OnDataReceived(const void* data, size_t len) override;
+  void OnDisconnected() override;
+  void OnError(const std::string& error) override;
 
   // HTTP protocol handling
   std::string BuildHttpRequest(const HttpRequest& request);

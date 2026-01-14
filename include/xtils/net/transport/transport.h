@@ -1,5 +1,4 @@
 #pragma once
-#include <functional>
 #include <memory>
 #include <string>
 
@@ -45,32 +44,27 @@ class TlsContext {
 
 using TlsContextPtr = std::shared_ptr<TlsContext>;
 
+class TransportEventListener {
+ public:
+  virtual ~TransportEventListener() = default;
+
+  virtual void OnConnected(bool success) = 0;
+  virtual void OnDataReceived(const void* data, size_t len) = 0;
+  virtual void OnDisconnected() = 0;
+  virtual void OnError(const std::string& error) = 0;
+};
+
 class Transport {
  public:
+  explicit Transport(TransportEventListener* listener) : listener_(listener) {}
   virtual ~Transport() = default;
 
   virtual bool Connect(const HttpUrl& url, TlsContextPtr ctx) = 0;
   virtual bool Send(const void* data, size_t len) = 0;
   virtual void Close() = 0;
 
-  void SetOnConnected(std::function<void(bool)> cb) {
-    on_connected_ = std::move(cb);
-  }
-  void SetOnData(std::function<void(const void*, size_t)> cb) {
-    on_data_ = std::move(cb);
-  }
-  void SetOnDisconnected(std::function<void()> cb) {
-    on_disconnected_ = std::move(cb);
-  }
-  void SetOnError(std::function<void(const std::string&)> cb) {
-    on_error_ = std::move(cb);
-  }
-
  protected:
-  std::function<void(bool)> on_connected_;
-  std::function<void(const void*, size_t)> on_data_;
-  std::function<void()> on_disconnected_;
-  std::function<void(const std::string&)> on_error_;
+  TransportEventListener* listener_{nullptr};
 };
 
 }  // namespace xtils

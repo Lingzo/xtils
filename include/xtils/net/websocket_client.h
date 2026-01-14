@@ -49,7 +49,7 @@ class WebSocketClientEventListener {
 };
 
 class WebSocketClient : public HttpClientEventListener,
-                        public TcpClientEventListener {
+                        public TransportEventListener {
  public:
   enum class State {
     kDisconnected = 0,
@@ -116,10 +116,10 @@ class WebSocketClient : public HttpClientEventListener,
   void OnHttpError(HttpClient* client, const std::string& error) override;
 
   // TcpClientEventListener implementation
-  void OnConnected(TcpClient* client, bool success) override;
-  void OnDataReceived(TcpClient* client, const void* data, size_t len) override;
-  void OnDisconnected(TcpClient* client) override;
-  void OnError(TcpClient* client, const std::string& error) override;
+  void OnConnected(bool success) override;
+  void OnDataReceived(const void* data, size_t len) override;
+  void OnDisconnected() override;
+  void OnError(const std::string& error) override;
 
   // WebSocket protocol handling
   void ProcessHandshakeResponse();

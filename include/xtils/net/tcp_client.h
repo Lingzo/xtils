@@ -17,19 +17,18 @@ class TcpClientEventListener {
   virtual ~TcpClientEventListener() = default;
 
   // Called when connection is established or fails
-  virtual void OnConnected(TcpClient* client, bool success) = 0;
+  virtual void OnConnected(bool success) = 0;
 
   // Called when data is received from server
-  virtual void OnDataReceived(TcpClient* client, const void* data,
-                              size_t len) = 0;
+  virtual void OnDataReceived(const void* data, size_t len) = 0;
 
   // Called when connection is lost or closed
-  virtual void OnDisconnected(TcpClient* client) = 0;
+  virtual void OnDisconnected() = 0;
 
   virtual bool OnReadable() { return false; }
 
   // Called when client encounters an error
-  virtual void OnError(TcpClient* client, const std::string& error) {}
+  virtual void OnError(const std::string& error) {}
 };
 
 class TcpClient : public UnixSocket::EventListener {

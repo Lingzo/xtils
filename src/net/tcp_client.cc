@@ -134,7 +134,7 @@ void TcpClient::OnConnect(UnixSocket* self, bool connected) {
   }
 
   if (listener_) {
-    listener_->OnConnected(this, connected);
+    listener_->OnConnected(connected);
   }
 }
 
@@ -142,7 +142,7 @@ void TcpClient::OnDisconnect(UnixSocket* self) {
   SetState(State::kDisconnected);
 
   if (listener_) {
-    listener_->OnDisconnected(this);
+    listener_->OnDisconnected();
   }
 }
 
@@ -161,12 +161,12 @@ void TcpClient::OnDataAvailable(UnixSocket* self) {
 
   size_t bytes_read = socket_->Receive(buffer, sizeof(buffer));
   if (bytes_read > 0) {
-    listener_->OnDataReceived(this, buffer, bytes_read);
+    listener_->OnDataReceived(buffer, bytes_read);
   } else if (bytes_read < 0) {
     // Connection closed or error
     SetState(State::kDisconnected);
     if (listener_) {
-      listener_->OnDisconnected(this);
+      listener_->OnDisconnected();
     }
   }
 }
@@ -181,7 +181,7 @@ void TcpClient::HandleError(const std::string& error) {
   SetState(State::kError);
 
   if (listener_) {
-    listener_->OnError(this, error);
+    listener_->OnError(error);
   }
 }
 

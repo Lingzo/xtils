@@ -75,19 +75,16 @@ class TestClientListener : public TcpClientEventListener {
   explicit TestClientListener(const std::string& name)
       : name_(name), connected_(false), data_received_count_(0) {}
 
-  void OnConnected(TcpClient* client, bool success) override {
+  void OnConnected(bool success) override {
     if (success) {
       connected_ = true;
-      std::cout << "[CLIENT:" << name_ << "] Connected to "
-                << client->GetServerAddress() << std::endl;
+      std::cout << "[CLIENT:" << name_ << "] Connected to server" << std::endl;
     } else {
       std::cout << "[CLIENT:" << name_ << "] Failed to connect" << std::endl;
     }
-    client->SendString("Hello Server!");
   }
 
-  void OnDataReceived(TcpClient* client, const void* data,
-                      size_t len) override {
+  void OnDataReceived(const void* data, size_t len) override {
     data_received_count_++;
     std::string received_data(static_cast<const char*>(data), len);
     std::cout << "[CLIENT:" << name_ << "] Received: " << received_data
@@ -96,12 +93,12 @@ class TestClientListener : public TcpClientEventListener {
     last_received_data_ = received_data;
   }
 
-  void OnDisconnected(TcpClient* client) override {
+  void OnDisconnected() override {
     connected_ = false;
     std::cout << "[CLIENT:" << name_ << "] Disconnected" << std::endl;
   }
 
-  void OnError(TcpClient* client, const std::string& error) override {
+  void OnError(const std::string& error) override {
     std::cout << "[CLIENT:" << name_ << "] Error: " << error << std::endl;
   }
 

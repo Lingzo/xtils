@@ -1,11 +1,14 @@
 #include "xtils/net/transport/plain_tcp_transport.h"
 
 #include "xtils/net/http_common.h"
+#include "xtils/net/transport/transport.h"
 #include "xtils/tasks/task_runner.h"
 
 namespace xtils {
 
-PlainTcpTransport::PlainTcpTransport(TaskRunner* runner) : runner_(runner) {
+PlainTcpTransport::PlainTcpTransport(TaskRunner* runner,
+                                     TransportEventListener* listener)
+    : Transport(listener), runner_(runner) {
   tcp_ = std::make_unique<TcpClient>(runner_, this);
 }
 
@@ -14,7 +17,7 @@ PlainTcpTransport::~PlainTcpTransport() { Close(); }
 bool PlainTcpTransport::Connect(const HttpUrl& url, TlsContextPtr ctx) {
   (void)ctx;  // Unused for plain TCP
   if (!tcp_) {
-    if (on_error_) on_error_("TcpClient not initialized");
+    if (listener_) listener_->OnError("TcpClient not initialized");
     return false;
   }
 
@@ -33,21 +36,20 @@ void PlainTcpTransport::Close() {
   }
 }
 
-void PlainTcpTransport::OnConnected(TcpClient*, bool success) {
-  if (on_connected_) on_connected_(success);
+void PlainTcpTransport::OnConnected(bool success) {
+  if (listener_) listener_->OnConnected(success);
 }
 
-void PlainTcpTransport::OnDataReceived(TcpClient*, const void* data,
-                                       size_t len) {
-  if (on_data_) on_data_(data, len);
+void PlainTcpTransport::OnDataReceived(const void* data, size_t len) {
+  if (listener_) listener_->OnDataReceived(data, len);
 }
 
-void PlainTcpTransport::OnDisconnected(TcpClient*) {
-  if (on_disconnected_) on_disconnected_();
+void PlainTcpTransport::OnDisconnected() {
+  if (listener_) listener_->OnDisconnected();
 }
 
-void PlainTcpTransport::OnError(TcpClient*, const std::string& error) {
-  if (on_error_) on_error_(error);
+void PlainTcpTransport::OnError(const std::string& error) {
+  if (listener_) listener_->OnError(error);
 }
 
 }  // namespace xtils

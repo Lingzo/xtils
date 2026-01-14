@@ -6,12 +6,17 @@
 #include "xtils/logging/logger.h"
 #include "xtils/net/http_common.h"
 #include "xtils/net/transport/tls_transport.h"
+#include "xtils/net/transport/transport.h"
 #include "xtils/tasks/task_runner.h"
 
 namespace xtils {
 
-TlsTransport::TlsTransport(TaskRunner* runner)
-    : runner_(runner), ctx_(nullptr), ssl_(nullptr), state_(TLSState::kIdle) {
+TlsTransport::TlsTransport(TaskRunner* runner, TransportEventListener* listener)
+    : Transport(listener),
+      runner_(runner),
+      ctx_(nullptr),
+      ssl_(nullptr),
+      state_(TLSState::kIdle) {
   tcp_ = std::make_unique<TcpClient>(runner_, this);
 
   static bool openssl_inited = false;
@@ -35,7 +40,7 @@ bool TlsTransport::Connect(const HttpUrl& url, TlsContextPtr ctx) {
   return tcp_->ConnectToHost(url.host, url.port);
 }
 
-void TlsTransport::OnConnected(TcpClient*, bool success) {
+void TlsTransport::OnConnected(bool success) {
   if (!success) {
     Fail("TCP connect failed");
     return;
@@ -63,7 +68,7 @@ void TlsTransport::ContinueHandshake() {
   int ret = SSL_connect(ssl_);
   if (ret == 1) {
     state_ = TLSState::kConnected;
-    if (on_connected_) on_connected_(true);
+    if (listener_) listener_->OnConnected(true);
     return;
   }
   int ssl_err = SSL_get_error(ssl_, ret);
@@ -103,7 +108,7 @@ void TlsTransport::ContinueHandshake() {
   }
 }
 
-void TlsTransport::OnDataReceived(TcpClient*, const void*, size_t) {
+void TlsTransport::OnDataReceived(const void*, size_t) {
   LogW("TlsTransport::OnDataReceived should not be called");
 }
 
@@ -124,7 +129,7 @@ void TlsTransport::DrainSSLRead() {
   while (true) {
     int n = SSL_read(ssl_, buf, sizeof(buf));
     if (n > 0) {
-      if (on_data_) on_data_(buf, static_cast<size_t>(n));
+      if (listener_) listener_->OnDataReceived(buf, static_cast<size_t>(n));
       continue;
     }
 
@@ -151,20 +156,18 @@ bool TlsTransport::Send(const void* data, size_t len) {
   return true;
 }
 
-void TlsTransport::OnDisconnected(TcpClient*) {
-  if (state_ != TLSState::kError && on_disconnected_) {
-    on_disconnected_();
+void TlsTransport::OnDisconnected() {
+  if (state_ != TLSState::kError && listener_) {
+    listener_->OnDisconnected();
   }
   Close();
 }
 
-void TlsTransport::OnError(TcpClient*, const std::string& error) {
-  Fail(error);
-}
+void TlsTransport::OnError(const std::string& error) { Fail(error); }
 
 void TlsTransport::Fail(const std::string& reason) {
   state_ = TLSState::kError;
-  if (on_error_) on_error_(reason);
+  if (listener_) listener_->OnError(reason);
 }
 
 void TlsTransport::Close() {

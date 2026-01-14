@@ -277,11 +277,7 @@ void HttpClient::SetVerifySSL(bool verify) { verify_ssl_ = verify; }
 void HttpClient::SetSSLCertificate(const std::string& cert_path) {
   ssl_cert_path_ = cert_path;
 }
-
-// TcpClientEventListener implementation
-void HttpClient::OnConnected(TcpClient* client, bool success) {
-  (void)client;
-
+void HttpClient::OnConnected(bool success) {
   if (!success) {
     HandleError("Failed to connect to host");
     return;
@@ -306,24 +302,18 @@ void HttpClient::OnConnected(TcpClient* client, bool success) {
   }
 }
 
-void HttpClient::OnDataReceived(TcpClient* client, const void* data,
-                                size_t len) {
-  (void)client;
-  state_.store(State::kReceivingResponse);
+void HttpClient::OnDataReceived(const void* data, size_t len) {
   ProcessReceivedData(data, len);
 }
 
-void HttpClient::OnDisconnected(TcpClient* client) {
+void HttpClient::OnDisconnected() {
   if (state_ == State::kReceivingResponse) {
     // Connection closed, complete the response if we have enough data
     CompleteRequest();
   }
 }
 
-void HttpClient::OnError(TcpClient* client, const std::string& error) {
-  (void)client;
-  HandleError(error);
-}
+void HttpClient::OnError(const std::string& error) { HandleError(error); }
 
 // HTTP protocol handling
 std::string HttpClient::BuildHttpRequest(const HttpRequest& request) {
@@ -659,18 +649,10 @@ bool HttpClient::ConnectToHost(const HttpUrl& url) {
   state_ = State::kConnecting;
 
   if (url.IsHttps()) {
-    transport_ = std::make_unique<TlsTransport>(task_runner_);
+    transport_ = std::make_unique<TlsTransport>(task_runner_, this);
   } else {  // default to plain TCP
-    transport_ = std::make_unique<PlainTcpTransport>(task_runner_);
+    transport_ = std::make_unique<PlainTcpTransport>(task_runner_, this);
   }
-  transport_->SetOnConnected(
-      [this](bool success) { OnConnected(nullptr, success); });
-  transport_->SetOnData([this](const void* data, size_t len) {
-    OnDataReceived(nullptr, data, len);
-  });
-  transport_->SetOnDisconnected([this]() { OnDisconnected(nullptr); });
-  transport_->SetOnError(
-      [this](const std::string& error) { OnError(nullptr, error); });
   TlsCertConfig cfg = TlsCertConfig::Default();
   if (!verify_ssl_) {
     cfg = TlsCertConfig::Insecure();

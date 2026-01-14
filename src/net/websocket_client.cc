@@ -113,18 +113,10 @@ bool WebSocketClient::Connect(const std::string& url,
 
   SetState(State::kConnecting);
   if (parsed_url.IsHttps()) {
-    transport_ = std::make_unique<TlsTransport>(task_runner_);
+    transport_ = std::make_unique<TlsTransport>(task_runner_, this);
   } else {
-    transport_ = std::make_unique<PlainTcpTransport>(task_runner_);
+    transport_ = std::make_unique<PlainTcpTransport>(task_runner_, this);
   }
-  transport_->SetOnConnected(
-      [this](bool success) { OnConnected(nullptr, true); });
-  transport_->SetOnDisconnected([this]() { OnDisconnected(nullptr); });
-  transport_->SetOnData([this](const void* data, size_t len) {
-    OnDataReceived(nullptr, data, len);
-  });
-  transport_->SetOnError(
-      [this](const std::string& error) { OnError(nullptr, error); });
   TlsCertConfig cfg = TlsCertConfig::Default();
   if (!verify_ssl_) {
     cfg = TlsCertConfig::Insecure();
@@ -241,7 +233,7 @@ void WebSocketClient::OnHttpError(HttpClient* client,
 }
 
 // TcpClientEventListener implementation
-void WebSocketClient::OnConnected(TcpClient* client, bool success) {
+void WebSocketClient::OnConnected(bool success) {
   if (!success) {
     HandleError("TCP connection failed");
     return;
@@ -260,8 +252,7 @@ void WebSocketClient::OnConnected(TcpClient* client, bool success) {
   }
 }
 
-void WebSocketClient::OnDataReceived(TcpClient* client, const void* data,
-                                     size_t len) {
+void WebSocketClient::OnDataReceived(const void* data, size_t len) {
   const uint8_t* bytes = static_cast<const uint8_t*>(data);
   receive_buffer_.insert(receive_buffer_.end(), bytes, bytes + len);
 
@@ -272,7 +263,7 @@ void WebSocketClient::OnDataReceived(TcpClient* client, const void* data,
   }
 }
 
-void WebSocketClient::OnDisconnected(TcpClient* client) {
+void WebSocketClient::OnDisconnected() {
   StopPingTimer();
 
   if (state_ != State::kClosed) {
@@ -289,7 +280,7 @@ void WebSocketClient::OnDisconnected(TcpClient* client) {
   }
 }
 
-void WebSocketClient::OnError(TcpClient* client, const std::string& error) {
+void WebSocketClient::OnError(const std::string& error) {
   HandleError("TCP error: " + error);
 }
 
