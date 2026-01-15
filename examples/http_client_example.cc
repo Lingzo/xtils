@@ -1,9 +1,11 @@
 #include <xtils/logging/logger.h>
 #include <xtils/net/http_client.h>
 
+#include <cstdio>
 #include <fstream>
 
 #include "xtils/app/service.h"
+#include "xtils/system/signal_handler.h"
 #include "xtils/tasks/thread_task_runner.h"
 #include "xtils/utils/file_utils.h"
 
@@ -83,6 +85,7 @@ void PrintUsage(const char* prog) {
 }
 
 int main(int argc, char** argv) {
+  xtils::system::SignalHandler::Initialize();
   if (argc < 3) {
     PrintUsage(argv[0]);
     return 1;
@@ -100,8 +103,7 @@ int main(int argc, char** argv) {
     LogI("Status: %d, %s", response.status_code,
          response.status_message.c_str());
     LogI("Body length: %zu bytes", response.body.length());
-    auto s = response.body.substr(0, 100);
-    LogI("Body:\n%s", s.c_str());
+    printf("%s", response.body.c_str());
   } else if (command == "post") {
     // POST request
     if (argc < 4) {
@@ -115,9 +117,9 @@ int main(int argc, char** argv) {
     LogI("Status: %d %s", response.status_code,
          response.status_message.c_str());
     LogI("Body length: %zu bytes", response.body.length());
-    if (response.body.length() < 1024) {
-      printf("\n%s\n", response.body.c_str());
-    }
+    // if (response.body.length() < 1024) {
+    printf("\n%s\n", response.body.c_str());
+    // }
 
   } else if (command == "download") {
     // Download to file

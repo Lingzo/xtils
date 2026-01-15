@@ -495,37 +495,88 @@ void HttpClient::ProcessReceivedData(const void* data, size_t len) {
 
   // If headers received, process body
   if (current_.headers_received) {
-    // Call body data callback if in streaming mode
-    if (listener_ && streaming_mode_ && !current_.receive_buffer.empty()) {
-      if (!listener_->OnBodyData(this, current_.receive_buffer.data(),
-                                 current_.receive_buffer.size())) {
-        HandleError("failed to process body data");
-      }
-      current_.receive_buffer.clear();
-      listener_->OnProgress(this, current_.bytes_received,
-                            current_.total_bytes);
-    }
-
-    // For non-streaming mode, accumulate data
-    if (!streaming_mode_ && !current_.receive_buffer.empty()) {
-      current_.response.body.append(current_.receive_buffer);
-      current_.receive_buffer.clear();
-    }
-
-    // Check if response is complete
-    if (!current_.chunked_encoding) {
-      if (current_.content_length >= 0) {
-        if (current_.response.body.size() >= current_.content_length) {
-          // Response complete
-          CompleteRequest();
-        }
-      }
+    if (current_.chunked_encoding) {
+      ProcessChunkedBody();
     } else {
-      // Handle chunked encoding - simplified
-      if (current_.response.body.find("0\r\n\r\n") != std::string::npos) {
+      ProcessFixedLengthBody();
+    }
+  }
+}
+
+void HttpClient::ProcessChunkedBody() {
+  while (true) {
+    // Ensure the buffer contains at least one complete line for the chunk size
+    size_t chunk_size_end = current_.receive_buffer.find("\r\n");
+    if (chunk_size_end == std::string::npos) {
+      return;  // Wait for more data
+    }
+    if (current_.chunk_size < 0) {  // don't parsed chunck_size
+      std::string chunk_size_str =
+          current_.receive_buffer.substr(0, chunk_size_end);
+      auto chunk_size = xtils::StringToUInt64(chunk_size_str, 16);
+      if (chunk_size) {
+        current_.chunk_size = *chunk_size;
+      } else {
+        HandleError("Invalid chunk size in chunked encoding");
+        return;
+      }
+      // Remove the chunk size line from the buffer
+      current_.receive_buffer.erase(0, chunk_size_end + 2);
+    }
+
+    // Handle the final chunk (chunk size 0)
+    if (current_.chunk_size == 0) {
+      size_t trailer_end = current_.receive_buffer.find("\r\n");
+      if (trailer_end != std::string::npos) {
+        current_.response.body.append(
+            current_.receive_buffer.data(),
+            current_.receive_buffer.size() - trailer_end);
+        current_.receive_buffer.clear();
         CompleteRequest();
       }
+      return;
     }
+
+    // Ensure the buffer contains the full chunk data and trailing \r\n
+    if (current_.receive_buffer.size() < current_.chunk_size + 2) {
+      return;  // Wait for more data
+    }
+    auto view = StringView(current_.receive_buffer);
+    if (streaming_mode_ && listener_ &&
+        !listener_->OnBodyData(this, view.data(), current_.chunk_size)) {
+      HandleError("Failed to process chunked body data");
+      return;
+    }
+
+    // Append the chunk data to the response body
+    current_.response.body.append(view.data(), current_.chunk_size);
+
+    // Remove the chunk data and trailing \r\n from the buffer
+    current_.receive_buffer.erase(0, current_.chunk_size + 2);
+    current_.chunk_size = -1;
+  }
+}
+
+void HttpClient::ProcessFixedLengthBody() {
+  // Call body data callback if in streaming mode
+  if (listener_ && streaming_mode_ && !current_.receive_buffer.empty()) {
+    if (!listener_->OnBodyData(this, current_.receive_buffer.data(),
+                               current_.receive_buffer.size())) {
+      HandleError("failed to process body data");
+    }
+    current_.receive_buffer.clear();
+    listener_->OnProgress(this, current_.bytes_received, current_.total_bytes);
+  }
+
+  // For non-streaming mode, accumulate data
+  if (!streaming_mode_ && !current_.receive_buffer.empty()) {
+    current_.response.body.append(current_.receive_buffer);
+    current_.receive_buffer.clear();
+  }
+
+  // Check if response is complete
+  if (current_.response.body.size() >= current_.content_length) {
+    CompleteRequest();
   }
 }
 
@@ -591,8 +642,6 @@ void HttpClient::HandleRedirect() {
 }
 
 void HttpClient::CompleteRequest() {
-  last_response_ = current_.response;
-
   // Handle redirects
   if (current_.response.IsRedirect()) {
     HandleRedirect();
@@ -628,7 +677,6 @@ void HttpClient::HandleError(const std::string& error) {
   state_.store(State::kError);
   current_.response.status_code = 0;
   current_.response.status_message = error;
-  last_response_ = current_.response;
 
   current_.completed.store(true);
 

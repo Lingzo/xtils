@@ -12,7 +12,6 @@
 
 #include "transport/transport.h"
 #include "xtils/net/http_common.h"
-#include "xtils/net/tcp_client.h"
 #include "xtils/tasks/task_runner.h"
 
 namespace xtils {
@@ -176,6 +175,8 @@ class HttpClient : public TransportEventListener {
  private:
   // TcpClientEventListener implementation
   void OnConnected(bool success) override;
+  void ProcessChunkedBody();
+  void ProcessFixedLengthBody();
   void OnDataReceived(const void* data, size_t len) override;
   void OnDisconnected() override;
   void OnError(const std::string& error) override;
@@ -225,6 +226,7 @@ class HttpClient : public TransportEventListener {
     size_t content_length = 0;
     size_t bytes_received = 0;
     bool chunked_encoding = false;
+    int chunk_size = -1;
     int redirect_count = 0;
     uint32_t timeout_ms = 0;
     std::atomic<bool> timeout_scheduled{false};
@@ -241,6 +243,7 @@ class HttpClient : public TransportEventListener {
       content_length = 0;
       bytes_received = 0;
       chunked_encoding = false;
+      chunk_size = -1;
       redirect_count = 0;
       timeout_ms = 0;
       timeout_scheduled.store(false);
