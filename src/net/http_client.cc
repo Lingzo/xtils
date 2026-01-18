@@ -1,5 +1,6 @@
 #include "xtils/net/http_client.h"
 
+#include <fstream>
 #include <sstream>
 
 #include "xtils/logging/logger.h"
@@ -425,15 +426,25 @@ bool HttpClient::SendMultipartBody(const HttpRequest& request) {
     current_.bytes_sent += header_str.size();
 
     // Read file content
-    std::string file_content = HttpUtils::ReadFileContent(file.file_path);
-    if (file_content.empty() && !HttpUtils::FileExists(file.file_path)) {
+    std::ifstream file_stream(file.file_path, std::ios::binary);
+    if (!file_stream.is_open()) {
+      HandleError("Failed to open file: " + file.file_path);
       return false;
     }
 
-    if (!transport_->Send(file_content.data(), file_content.size())) {
-      return false;
+    char buffer[4096];
+    while (file_stream.read(buffer, sizeof(buffer)) ||
+           file_stream.gcount() > 0) {
+      if (!transport_->Send(buffer, file_stream.gcount())) {
+        return false;
+      }
+      current_.bytes_sent += file_stream.gcount();
+
+      // Report progress
+      if (listener_) {
+        listener_->OnProgress(this, current_.bytes_sent, current_.total_bytes);
+      }
     }
-    current_.bytes_sent += file_content.size();
 
     // Report progress
     if (listener_) {
@@ -454,6 +465,10 @@ bool HttpClient::SendMultipartBody(const HttpRequest& request) {
     return false;
   }
   current_.bytes_sent += final_boundary.size();
+  // Report progress
+  if (listener_) {
+    listener_->OnProgress(this, current_.bytes_sent, current_.total_bytes);
+  }
 
   return true;
 }
@@ -557,8 +572,8 @@ void HttpClient::ProcessChunkedBody() {
   }
 }
 
-void HttpClient::ProcessFixedLengthBody() {
-  // Call body data callback if in streaming mode
+void HttpClient::ProcessFixedLengthBody() {  // Call body data callback if in
+                                             // streaming mode
   if (listener_ && streaming_mode_ && !current_.receive_buffer.empty()) {
     if (!listener_->OnBodyData(this, current_.receive_buffer.data(),
                                current_.receive_buffer.size())) {
@@ -616,7 +631,6 @@ void HttpClient::HandleRedirect() {
     HandleError("Invalid redirect URL");
     return;
   }
-  LogD("Redirecting to: %s", new_url.ToString().c_str());
 
   // Update request URL
   current_.request.url = new_url;
@@ -824,21 +838,26 @@ size_t HttpClient::CalculateMultipartSize(
   // Calculate fields size
   for (const auto& field : fields) {
     total_size += 2 + boundary.size() + 2;  // --boundary\r\n
-    total_size += 38 + field.name.size() +
-                  4;  // Content-Disposition: form-data; name=""\r\n\r\n
+    // Content-Disposition: form-data; name=""\r\n\r\n
+    total_size += 39 + field.name.size() + 4;
     total_size += field.value.size() + 2;  // value\r\n
   }
 
   // Calculate files size
   for (const auto& file : files) {
     total_size += 2 + boundary.size() + 2;  // --boundary\r\n
-    total_size += 38 + file.field_name.size() + 13 + file.filename.size() +
-                  3;  // Content-Disposition header
+    // Content-Disposition header
+    total_size += 38 + file.field_name.size() + 13 + file.filename.size() + 3;
     total_size +=
         14 + file.content_type.size() + 4;  // Content-Type: type\r\n\r\n
 
-    // Get file size
-    total_size += HttpUtils::GetFileSize(file.file_path);
+    // Get file size with error handling
+    size_t file_size = HttpUtils::GetFileSize(file.file_path);
+    if (file_size == 0) {
+      throw std::runtime_error("Failed to get file size for: " +
+                               file.file_path);
+    }
+    total_size += file_size;
     total_size += 2;  // \r\n
   }
 

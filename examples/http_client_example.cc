@@ -202,15 +202,9 @@ int main(int argc, char** argv) {
     client.SetTimeout(300000);  // 5 minutes for large files
 
     LogI("Uploading %s to %s...", file_path.c_str(), url.c_str());
-    if (client.PostMultipartAsync(url, fields, files)) {
-      // Wait for completion
-      while (client.IsBusy()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      }
-    } else {
-      LogE("Failed to start upload");
-    }
-
+    auto rep = client.PostMultipart(url, fields, files);
+    LogI("rep status: %d", rep.status_code);
+    LogI("%s", rep.body.c_str());
   } else {
     LogE("Unknown command: %s", command.c_str());
     PrintUsage(argv[0]);
