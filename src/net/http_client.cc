@@ -62,10 +62,8 @@ bool HttpResponse::HasHeader(const std::string& name) const {
 }
 
 // HttpClient implementation
-HttpClient::HttpClient(TaskRunner* task_runner,
-                       HttpClientEventListener* listener)
+HttpClient::HttpClient(TaskRunner* task_runner)
     : task_runner_(task_runner),
-      listener_(listener),
       state_(State::kIdle),
       default_timeout_ms_(30000),
       follow_redirects_(true),
@@ -74,7 +72,6 @@ HttpClient::HttpClient(TaskRunner* task_runner,
       verify_ssl_(true),
       ssl_cert_path_(),
       max_receive_buffer_size_(100 * 1024 * 1024),
-      streaming_mode_(false),
       connection_reusable_(false) {
   SetUserAgent("xtils/1.0");
 }
@@ -86,8 +83,7 @@ HttpResponse HttpClient::Request(const HttpRequest& request) {
 
   current_.Reset();
   current_.completed.store(false);
-
-  if (!RequestAsync(request)) {
+  if (!RequestAsync(request, nullptr)) {
     HttpResponse error_response;
     error_response.status_code = 0;
     error_response.status_message = "Failed to start request";
@@ -108,7 +104,9 @@ HttpResponse HttpClient::Request(const HttpRequest& request) {
   return current_.response;
 }
 
-bool HttpClient::RequestAsync(const HttpRequest& request) {
+bool HttpClient::RequestAsync(const HttpRequest& request,
+                              HttpClientEventListener* listener) {
+  listener_ = listener;
   if (IsBusy()) {
     return false;
   }
@@ -179,37 +177,40 @@ HttpResponse HttpClient::PostMultipart(
   return Request(request);
 }
 
-bool HttpClient::GetAsync(const std::string& url) {
+bool HttpClient::GetAsync(const std::string& url,
+                          HttpClientEventListener* listener) {
   HttpRequest request;
   request.method = HttpMethod::kGet;
   request.url = HttpUrl(url);
-  return RequestAsync(request);
+  return RequestAsync(request, listener);
 }
 
 bool HttpClient::PostAsync(const std::string& url, const std::string& body,
-                           const std::string& content_type) {
+                           const std::string& content_type,
+                           HttpClientEventListener* listener) {
   HttpRequest request;
   request.method = HttpMethod::kPost;
   request.url = HttpUrl(url);
   request.SetBody(body, content_type);
-  return RequestAsync(request);
+  return RequestAsync(request, listener);
 }
 
-bool HttpClient::PostJsonAsync(const std::string& url,
-                               const std::string& json) {
-  return PostAsync(url, json, "application/json");
+bool HttpClient::PostJsonAsync(const std::string& url, const std::string& json,
+                               HttpClientEventListener* listener) {
+  return PostAsync(url, json, "application/json", listener);
 }
 
 bool HttpClient::PostMultipartAsync(const std::string& url,
                                     const std::vector<MultipartField>& fields,
-                                    const std::vector<MultipartFile>& files) {
+                                    const std::vector<MultipartFile>& files,
+                                    HttpClientEventListener* listener) {
   HttpRequest request;
   request.method = HttpMethod::kPost;
   request.url = HttpUrl(url);
   request.multipart_fields = fields;
   request.multipart_files = files;
   request.boundary = GenerateBoundary();
-  return RequestAsync(request);
+  return RequestAsync(request, listener);
 }
 
 void HttpClient::Cancel() {
@@ -502,7 +503,8 @@ void HttpClient::ProcessReceivedData(const void* data, size_t len) {
         current_.content_length = std::stoull(content_length_str);
         current_.response.content_length = current_.content_length;
         if (current_.content_length > max_receive_buffer_size_) {
-          streaming_mode_ = true;
+          HandleError("Response content length exceeds maximum buffer size");
+          return;
         }
       }
     }
@@ -543,9 +545,16 @@ void HttpClient::ProcessChunkedBody() {
     if (current_.chunk_size == 0) {
       size_t trailer_end = current_.receive_buffer.find("\r\n");
       if (trailer_end != std::string::npos) {
-        current_.response.body.append(
-            current_.receive_buffer.data(),
-            current_.receive_buffer.size() - trailer_end);
+        int size = current_.receive_buffer.size() - trailer_end;
+        current_.bytes_received += size;
+        if (listener_) {
+          listener_->OnProgress(this, current_.bytes_received, -1);
+        }
+        if (listener_ && !listener_->OnBodyData(
+                             this, current_.receive_buffer.data(), size)) {
+        } else {
+          current_.response.body.append(current_.receive_buffer.data(), size);
+        }
         current_.receive_buffer.clear();
         CompleteRequest();
       }
@@ -557,15 +566,15 @@ void HttpClient::ProcessChunkedBody() {
       return;  // Wait for more data
     }
     auto view = StringView(current_.receive_buffer);
-    if (streaming_mode_ && listener_ &&
-        !listener_->OnBodyData(this, view.data(), current_.chunk_size)) {
-      HandleError("Failed to process chunked body data");
-      return;
+    current_.bytes_received += current_.chunk_size;
+    if (listener_) {
+      listener_->OnProgress(this, current_.bytes_received, -1);
     }
-
-    // Append the chunk data to the response body
-    current_.response.body.append(view.data(), current_.chunk_size);
-
+    if (listener_ &&
+        !listener_->OnBodyData(this, view.data(), current_.chunk_size)) {
+    } else {
+      current_.response.body.append(view.data(), current_.chunk_size);
+    }
     // Remove the chunk data and trailing \r\n from the buffer
     current_.receive_buffer.erase(0, current_.chunk_size + 2);
     current_.chunk_size = -1;
@@ -574,20 +583,21 @@ void HttpClient::ProcessChunkedBody() {
 
 void HttpClient::ProcessFixedLengthBody() {  // Call body data callback if in
                                              // streaming mode
-  if (listener_ && streaming_mode_ && !current_.receive_buffer.empty()) {
-    if (!listener_->OnBodyData(this, current_.receive_buffer.data(),
-                               current_.receive_buffer.size())) {
-      HandleError("failed to process body data");
-    }
-    current_.receive_buffer.clear();
+
+  if (listener_ && !current_.receive_buffer.empty()) {
     listener_->OnProgress(this, current_.bytes_received, current_.total_bytes);
   }
 
   // For non-streaming mode, accumulate data
-  if (!streaming_mode_ && !current_.receive_buffer.empty()) {
-    current_.response.body.append(current_.receive_buffer);
-    current_.receive_buffer.clear();
+  if (!current_.receive_buffer.empty()) {
+    if (listener_ &&
+        !listener_->OnBodyData(this, current_.receive_buffer.data(),
+                               current_.receive_buffer.size())) {
+    } else {
+      current_.response.body.append(current_.receive_buffer);
+    }
   }
+  current_.receive_buffer.clear();  // for next data
 
   // Check if response is complete
   if (current_.response.body.size() >= current_.content_length) {

@@ -87,7 +87,7 @@ class HttpClientEventListener {
 
   // Called for upload/download progress
   virtual void OnProgress(HttpClient* client, size_t bytes_transferred,
-                          size_t total_bytes) {}
+                          int64_t total_bytes) {}
 
   // Called when following redirects
   virtual void OnRedirect(HttpClient* client, const std::string& new_url) {}
@@ -110,15 +110,15 @@ class HttpClient : public TransportEventListener {
     kError
   };
 
-  explicit HttpClient(TaskRunner* task_runner,
-                      HttpClientEventListener* listener = nullptr);
+  explicit HttpClient(TaskRunner* task_runner);
   ~HttpClient() override;
 
   // Synchronous HTTP request
   HttpResponse Request(const HttpRequest& request);
 
   // Asynchronous HTTP request
-  bool RequestAsync(const HttpRequest& request);
+  bool RequestAsync(const HttpRequest& request,
+                    HttpClientEventListener* listener);
 
   // Convenience methods for common HTTP operations
   HttpResponse Get(const std::string& url);
@@ -132,13 +132,16 @@ class HttpClient : public TransportEventListener {
                              const std::vector<MultipartFile>& files);
 
   // Async versions
-  bool GetAsync(const std::string& url);
+  bool GetAsync(const std::string& url, HttpClientEventListener* listener);
   bool PostAsync(const std::string& url, const std::string& body,
-                 const std::string& content_type = "");
-  bool PostJsonAsync(const std::string& url, const std::string& json);
+                 const std::string& content_type,
+                 HttpClientEventListener* listener);
+  bool PostJsonAsync(const std::string& url, const std::string& json,
+                     HttpClientEventListener* listener);
   bool PostMultipartAsync(const std::string& url,
                           const std::vector<MultipartField>& fields,
-                          const std::vector<MultipartFile>& files);
+                          const std::vector<MultipartFile>& files,
+                          HttpClientEventListener* listener);
 
   // Cancel current request
   void Cancel();
@@ -269,7 +272,6 @@ class HttpClient : public TransportEventListener {
   int max_redirects_;
   bool keep_alive_;
   size_t max_receive_buffer_size_;
-  bool streaming_mode_;
 
   bool verify_ssl_;
   std::string ssl_cert_path_;

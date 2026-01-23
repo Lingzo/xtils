@@ -46,11 +46,13 @@ class DownloadListener : public HttpClientEventListener {
   }
 
   void OnProgress(HttpClient* client, size_t bytes_transferred,
-                  size_t total_bytes) override {
+                  int64_t total_bytes) override {
     if (total_bytes > 0) {
       double progress = (bytes_transferred * 100.0 / total_bytes);
       LogI("Progress: %.1f%% (%zu/%zu)", progress, bytes_transferred,
            total_bytes);
+    } else {
+      LogI("Stream mode");
     }
   }
 
@@ -62,7 +64,7 @@ class DownloadListener : public HttpClientEventListener {
       return file_.good();
     }
     LogThis();
-    return true;
+    return false;  // no need to do next
   }
 
  private:
@@ -98,7 +100,7 @@ int main(int argc, char** argv) {
 
   if (command == "get") {
     // Simple GET request
-    HttpClient client(&task_runner, nullptr);
+    HttpClient client(&task_runner);
     auto response = client.Get(url);
     LogI("Status: %d, %s", response.status_code,
          response.status_message.c_str());
@@ -112,7 +114,7 @@ int main(int argc, char** argv) {
       return 1;
     }
     std::string data = argv[3];
-    HttpClient client(&task_runner, nullptr);
+    HttpClient client(&task_runner);
     auto response = client.PostJson(url, data);
     LogI("Status: %d %s", response.status_code,
          response.status_message.c_str());
@@ -131,11 +133,11 @@ int main(int argc, char** argv) {
     std::string output_file = argv[3];
 
     DownloadListener listener(output_file);
-    HttpClient client(&task_runner, &listener);
+    HttpClient client(&task_runner);
     client.SetMaxReceiveBufferSize(1024 * 1024);  // 1MB buffer
     client.SetTimeout(300000);                    // 5 minutes for large files
 
-    if (client.GetAsync(url)) {
+    if (client.GetAsync(url, &listener)) {
       LogI("Downloading %s to %s...", url.c_str(), output_file.c_str());
       // Wait for completion
       while (client.IsBusy()) {
@@ -148,9 +150,9 @@ int main(int argc, char** argv) {
   } else if (command == "async") {
     // Async request
     DownloadListener listener;
-    HttpClient client(&task_runner, &listener);
+    HttpClient client(&task_runner);
 
-    if (client.GetAsync(url)) {
+    if (client.GetAsync(url, &listener)) {
       LogI("Async request started: %s", url.c_str());
       // Wait for completion
       while (client.IsBusy()) {
@@ -198,7 +200,7 @@ int main(int argc, char** argv) {
     files.push_back(file);
 
     DownloadListener listener;
-    HttpClient client(&task_runner, &listener);
+    HttpClient client(&task_runner);
     client.SetTimeout(300000);  // 5 minutes for large files
 
     LogI("Uploading %s to %s...", file_path.c_str(), url.c_str());
