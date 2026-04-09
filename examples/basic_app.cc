@@ -29,7 +29,7 @@ class SimpleService : public xtils::Service<SimpleService> {
     LogI("Compenets Init");
     LogI("params is %d", config.get<int>("params"));
     for (int i = 0; i < 10; i++)
-      ctx->PostAsyncTask(
+      ctx->spawn_async(
           []() {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             LogI("Run in back");
@@ -49,7 +49,7 @@ class SimpleService : public xtils::Service<SimpleService> {
       LogI("On Event 2 %d", e);
       ctx->emit(EVENT_TEST);
     });
-    ctx->PostAsyncTask([this] {
+    ctx->spawn_async([this] {
       TRACE_SCOPE("Task");
       fib(10);
       LogThis();

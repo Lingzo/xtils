@@ -88,10 +88,11 @@ void App::init(const std::vector<std::string> &args) {
   // init thread pool
   int threads_size = conf().get_int("xtils.threads");
   CHECK(threads_size > 1);
-  tg_ = std::make_unique<TaskGroup>(threads_size);
-  em_ =
-      std::make_unique<EventManager>(TaskGroup::Sequential(tg_->main_runner()));
-  timer_ = std::make_unique<SteadyTimer>(tg_.get());
+  async_tg_ = std::make_unique<TaskGroup>(threads_size);
+  // init event manager
+  em_ = std::make_unique<EventManager>(
+      TaskGroup::Sequential(async_tg_->main_runner()));
+  timer_ = std::make_unique<SteadyTimer>(async_tg_.get());
   initialized_ = true;
 }
 
@@ -196,7 +197,7 @@ void App::run_daemon() {
     return;
   }
   main_ = std::thread(std::bind(&App::run, this));
-  bool ret = tg_->RunUntilCompleted([]() { return true; });
+  bool ret = async_tg_->RunUntilCompleted([]() { return true; });
 }
 
 void App::run() {
@@ -216,11 +217,11 @@ void App::run() {
     if (diff_ms > 5000) {
       LogW("main threads blocked, %fms!!!", diff_ms);
     } else if (diff_ms > 2000) {
-      PostTask([&t1]() { t1 = steady::GetCurrentMs(); });
+      spawn([&t1]() { t1 = steady::GetCurrentMs(); });
     }
-    if (tg_->is_busy()) {
+    if (async_tg_->is_busy()) {
       LogW("task group is busy, maybe use more threads, cur is: %d!!!",
-           tg_->size());
+           async_tg_->size());
     }
   }
   LogI("App shutting down...");
@@ -237,32 +238,33 @@ void App::deinit() {
     Inspect::Get().Stop();
   }
 #endif
-  tg_->stop();  // stop task group first
-  em_->stop();  // stop event manager
+  async_tg_->stop();  // stop task group
+  em_->stop();        // stop event manager
 
   for (auto &p : service_) {
     p->deinit();
   }
   em_.reset();
   timer_.reset();
-  tg_.reset();  // must be last
+  async_tg_.reset();
 }
 
-void App::PostTask(Task task) { tg_->PostTask(task); }
+void App::spawn(Task task) {
+  async_tg_->main_runner()->PostTask(std::move(task));
+}
 
-void App::PostAsyncTask(Task task, Task main) {
-  std::weak_ptr<TaskGroup> weak_ptr = tg_;
-  tg_->PostAsyncTask([task = task, main = main, weak_ptr]() {
-    {
-      TRACE_SCOPE("AsyncTask");
-      task();
-    }
-    if (main) {
-      if (auto tg = weak_ptr.lock()) {
-        tg->PostTask(main);
-      }
-    }
-  });
+void App::spawn_async(Task task, Task main) {
+  auto main_runner = async_tg_->main_runner();
+  async_tg_->PostAsyncTask(
+      [task = std::move(task), main = std::move(main), main_runner]() {
+        {
+          TRACE_SCOPE("AsyncTask");
+          task();
+        }
+        if (main) {
+          main_runner->PostTask(std::move(main));
+        }
+      });
 }
 
 void App::every(uint32_t ms, TimerCallback cb) {

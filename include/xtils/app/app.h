@@ -36,8 +36,17 @@ class App {
   void init(const std::vector<std::string>& args);
   bool is_running();
 
-  void PostTask(Task task);
-  void PostAsyncTask(Task task, Task main = nullptr);
+  // Post a task to run on the main thread (synchronously, in order).
+  // WARNING: Long-running tasks will block other spawn() tasks, spawn_async()
+  // callbacks, timers, and event handlers. Use spawn_async() for I/O or
+  // CPU-intensive work.
+  void spawn(Task task);
+
+  // Post a task to run on a worker thread (asynchronously, in parallel).
+  // The optional `main` callback runs on the main thread after `task`
+  // completes. Use this for I/O operations, network calls, or CPU-intensive
+  // work.
+  void spawn_async(Task task, Task main = nullptr);
 
   void every(uint32_t ms, TimerCallback cb);
 
@@ -78,7 +87,7 @@ class App {
  private:
   Config config_;
   std::unique_ptr<EventManager> em_;
-  std::shared_ptr<TaskGroup> tg_;
+  std::shared_ptr<TaskGroup> async_tg_;
   std::unique_ptr<SteadyTimer> timer_;
   std::list<std::shared_ptr<IService>> service_;
   bool running_ = false;
