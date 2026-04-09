@@ -3,8 +3,10 @@
 #include <xtils/utils/type_traits.h>
 
 #include <atomic>
+#include <deque>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -15,6 +17,9 @@
 namespace xtils {
 
 using Json = xtils::Json;
+
+// Event type identifier for behavior tree event system
+using EventType = int32_t;
 struct AnyData {
   std::string_view type_name;
   std::shared_ptr<void> data;
@@ -35,6 +40,13 @@ AnyData make_any_data(const T& t) {
   any_data.data = std::make_unique<std::decay_t<T>>(t);
   return any_data;
 }
+
+// Event structure for inter-node communication and tree control
+struct BtEvent {
+  EventType type{0};
+  AnyData data;
+  uint64_t timestamp{0};
+};
 
 class AnyMap {
  public:
@@ -172,6 +184,7 @@ class Node {
   AnyMap* blackboard_{nullptr};
   AnyMap data_;
   BtLogger* record_{nullptr};
+  BtTree* tree_{nullptr};  // Reference to owning tree for event access
 
  private:
   Type type_;
@@ -292,6 +305,23 @@ class BtTree {
     return *blackboard_;
   }
 
+  // === Pause/Resume ===
+  void pause();
+  void resume();
+  bool isPaused() const { return paused_.load(); }
+
+  // === Event System ===
+  // Send an event to the tree's event queue
+  void sendEvent(EventType type, const AnyData& data = {});
+  // Peek at an event without consuming it
+  std::optional<BtEvent> peekEvent(EventType type) const;
+  // Consume and return an event if present
+  std::optional<BtEvent> consumeEvent(EventType type);
+  // Check if an event of the given type exists
+  bool hasEvent(EventType type) const;
+  // Clear all pending events
+  void clearEvents();
+
  private:
   void visit_nodes(Node::Ptr& node);
   std::string dump_node(const Node& node);
@@ -302,6 +332,13 @@ class BtTree {
   std::vector<Node::Ptr> nodes_;
   std::shared_ptr<AnyMap> blackboard_;
   std::shared_ptr<BtLogger> logger_;
+
+  // Pause state
+  std::atomic<bool> paused_{false};
+
+  // Event queue with thread-safe access
+  mutable std::mutex event_mutex_;
+  std::deque<BtEvent> event_queue_;
 };
 
 // Factory / builder that parses JSON and constructs nodes.
@@ -329,6 +366,13 @@ class BtFactory {
                     },
                     Type::Action};
   }
+
+  // Register a subtree template by name for SubTree node reference
+  void RegisterTree(const std::string& name, const Json& tree_json);
+
+  // Get a registered tree JSON by name
+  std::optional<Json> getRegisteredTree(const std::string& name) const;
+
   // Build tree from json
   BtTree::Ptr buildFromJson(const Json& j,
                             std::shared_ptr<AnyMap> blackboard = nullptr,
@@ -342,7 +386,79 @@ class BtFactory {
     Ports ports;
   };
   std::unordered_map<std::string, Factory> nodes_;
+  std::unordered_map<std::string, Json> registered_trees_;
   Node::Ptr buildNode(const Json& j);
+};
+
+// ============================================================================
+// SubTree node - executes a registered or inline subtree
+// ============================================================================
+class SubTree : public Decorator {
+ public:
+  SubTree(const std::string& name = "");
+
+  static Ports getPorts() { return {InputPort<std::string>("tree_name")}; }
+  static std::string desc() { return "Execute a registered subtree"; }
+
+  Status OnStart() override;
+  Status OnTick() override;
+  void OnStop() override;
+
+ private:
+  friend class BtFactory;
+  BtTree::Ptr subtree_;
+  Json inline_tree_;  // For inline subtree definition
+};
+
+// ============================================================================
+// WaitForEvent - blocks until specified event is received or timeout
+// ============================================================================
+class WaitForEvent : public ActionNode {
+ public:
+  WaitForEvent(const std::string& name = "");
+
+  static Ports getPorts() {
+    return {
+        InputPort<int32_t>("event_type"),
+        InputPort<double>("timeout_ms")  // -1 for infinite wait
+    };
+  }
+  static std::string desc() { return "Wait for a specific event"; }
+
+  Status OnStart() override;
+  Status OnTick() override;
+
+ private:
+  EventType event_type_{0};
+  double timeout_ms_{-1};
+  uint64_t start_time_{0};
+};
+
+// ============================================================================
+// EventGuard - monitors events and can interrupt child execution
+// ============================================================================
+class EventGuard : public Decorator {
+ public:
+  EventGuard(const std::string& name = "");
+
+  static Ports getPorts() {
+    return {
+        InputPort<int32_t>("event_type"),
+        InputPort<int>("interrupt_mode"),  // 0: next tick, 1: immediate
+        InputPort<int>("return_status")    // 0: Success, 1: Failure
+    };
+  }
+  static std::string desc() { return "Guard child with event interrupt"; }
+
+  Status OnStart() override;
+  Status OnTick() override;
+  void OnStop() override;
+
+ private:
+  EventType event_type_{0};
+  bool immediate_interrupt_{false};
+  Status interrupt_status_{Status::Failure};
+  bool interrupted_{false};
 };
 
 }  // namespace xtils

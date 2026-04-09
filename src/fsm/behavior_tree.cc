@@ -1,6 +1,7 @@
 #include <xtils/fsm/behavior_tree.h>
 #include <xtils/logging/logger.h>
 #include <xtils/utils/exception.h>
+#include <xtils/utils/time_utils.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -76,12 +77,28 @@ Node::Ptr BtFactory::buildNode(const Json& j) {
       for (auto& c : j["children"].as_array())
         std::reinterpret_pointer_cast<Composite>(node)->addChild(buildNode(c));
     } else if (factory->second.type == Type::Decorator) {
-      if (!j.has_key("children") || j["children"].as_array().size() != 1) {
-        throw xtils::runtime_error(
-            "Decorator node must have exactly one child");
+      // Special handling for SubTree node
+      if (name == "SubTree") {
+        auto subtree_node = std::reinterpret_pointer_cast<SubTree>(node);
+
+        // Check for inline subtree definition
+        if (j.has_key("subtree")) {
+          auto subtree_json = j["subtree"];
+          subtree_node->inline_tree_ = subtree_json;
+          // Build the subtree immediately
+          subtree_node->subtree_ = buildFromJson(subtree_json);
+        }
+        // For registered tree_name, the subtree will be built in OnStart
+        // after ports are processed below
+      } else {
+        // Normal decorator: must have exactly one child
+        if (!j.has_key("children") || j["children"].as_array().size() != 1) {
+          throw xtils::runtime_error(
+              "Decorator node must have exactly one child");
+        }
+        std::reinterpret_pointer_cast<Decorator>(node)->setChild(
+            buildNode(j["children"][0]));
       }
-      std::reinterpret_pointer_cast<Decorator>(node)->setChild(
-          buildNode(j["children"][0]));
     }
 
     if (auto ports = j.get_object("ports")) {
@@ -130,6 +147,25 @@ Node::Ptr BtFactory::buildNode(const Json& j) {
         }
       }
     }
+
+    // Handle SubTree with registered tree_name (after ports are processed)
+    if (name == "SubTree") {
+      auto subtree_node = std::reinterpret_pointer_cast<SubTree>(node);
+      if (!subtree_node->subtree_) {
+        // No inline subtree, try to build from registered tree_name
+        auto tree_name_opt = subtree_node->getInput<std::string>("tree_name");
+        if (tree_name_opt && !tree_name_opt->empty()) {
+          auto registered_tree = getRegisteredTree(*tree_name_opt);
+          if (registered_tree) {
+            subtree_node->subtree_ = buildFromJson(*registered_tree);
+          } else {
+            throw xtils::runtime_error("SubTree: registered tree not found: " +
+                                       *tree_name_opt);
+          }
+        }
+      }
+    }
+
     return node;
   } else {
     throw xtils::runtime_error("Unknown node type: " + id);
@@ -148,11 +184,14 @@ BtFactory::BtFactory() {
   Register<Inverter>("Inverter");
   Register<Retry>("Retry");
   Register<Repeater>("Repeater");
+  Register<SubTree>("SubTree");
+  Register<EventGuard>("EventGuard");
 
   // Actions
   Register<AlwaysSuccess>("AlwaysSuccess");
   Register<AlwaysFailure>("AlwaysFailure");
   Register<Wait>("Wait");
+  Register<WaitForEvent>("WaitForEvent");
 }
 
 std::string BtFactory::dump() const {
@@ -263,12 +302,19 @@ void BtTree::visit_nodes(Node::Ptr& node) {
   nodes_.push_back(node);
   node->id_ = ids_.fetch_add(1);
   node->blackboard_ = blackboard_.get();
+  node->tree_ = this;  // Set tree reference for event access
   if (logger_) node->record_ = logger_.get();
   for (auto& child : node->children) {
     visit_nodes(child);
   }
 }
-Status BtTree::tick() { return root_->tick(); }
+Status BtTree::tick() {
+  // When paused, maintain Running state without executing
+  if (paused_.load()) {
+    return Status::Running;
+  }
+  return root_->tick();
+}
 void BtTree::reset() { root_->reset(); }
 
 void BtTree::shutdown() {}
@@ -346,5 +392,196 @@ Json BtTree::dump_tree_node(const Node& node) {
 
   return json;
 }
+
+// ============================================================================
+// BtTree Pause/Resume
+// ============================================================================
+void BtTree::pause() { paused_.store(true); }
+
+void BtTree::resume() { paused_.store(false); }
+
+// ============================================================================
+// BtTree Event System
+// ============================================================================
+void BtTree::sendEvent(EventType type, const AnyData& data) {
+  std::lock_guard<std::mutex> lock(event_mutex_);
+  BtEvent event;
+  event.type = type;
+  event.data = data;
+  event.timestamp = steady::GetCurrentMs();
+  event_queue_.push_back(event);
+}
+
+std::optional<BtEvent> BtTree::peekEvent(EventType type) const {
+  std::lock_guard<std::mutex> lock(event_mutex_);
+  for (const auto& event : event_queue_) {
+    if (event.type == type) {
+      return event;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<BtEvent> BtTree::consumeEvent(EventType type) {
+  std::lock_guard<std::mutex> lock(event_mutex_);
+  for (auto it = event_queue_.begin(); it != event_queue_.end(); ++it) {
+    if (it->type == type) {
+      BtEvent event = *it;
+      event_queue_.erase(it);
+      return event;
+    }
+  }
+  return std::nullopt;
+}
+
+bool BtTree::hasEvent(EventType type) const {
+  std::lock_guard<std::mutex> lock(event_mutex_);
+  for (const auto& event : event_queue_) {
+    if (event.type == type) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void BtTree::clearEvents() {
+  std::lock_guard<std::mutex> lock(event_mutex_);
+  event_queue_.clear();
+}
+
+// ============================================================================
+// BtFactory Tree Registration
+// ============================================================================
+void BtFactory::RegisterTree(const std::string& name, const Json& tree_json) {
+  registered_trees_[name] = tree_json;
+}
+
+std::optional<Json> BtFactory::getRegisteredTree(
+    const std::string& name) const {
+  auto it = registered_trees_.find(name);
+  if (it != registered_trees_.end()) {
+    return it->second;
+  }
+  return std::nullopt;
+}
+
+// ============================================================================
+// SubTree Node
+// ============================================================================
+SubTree::SubTree(const std::string& name) : Decorator(name) {}
+
+Status SubTree::OnStart() {
+  // Subtree should be initialized by factory or inline definition
+  if (!subtree_) {
+    return Status::Failure;
+  }
+  return Status::Running;
+}
+
+Status SubTree::OnTick() {
+  if (!subtree_) {
+    return Status::Failure;
+  }
+  return subtree_->tick();
+}
+
+void SubTree::OnStop() {
+  if (subtree_) {
+    subtree_->reset();
+  }
+}
+
+// ============================================================================
+// WaitForEvent Node
+// ============================================================================
+WaitForEvent::WaitForEvent(const std::string& name) : ActionNode(name) {}
+
+Status WaitForEvent::OnStart() {
+  auto event_type_opt = getInput<int32_t>("event_type");
+  if (!event_type_opt) {
+    throw xtils::runtime_error("WaitForEvent requires event_type input");
+  }
+  event_type_ = *event_type_opt;
+
+  auto timeout_opt = getInput<double>("timeout_ms");
+  timeout_ms_ = timeout_opt.value_or(-1);
+
+  start_time_ = steady::GetCurrentMs();
+  return Status::Running;
+}
+
+Status WaitForEvent::OnTick() {
+  if (!tree_) {
+    return Status::Failure;
+  }
+
+  // Check for event
+  if (tree_->consumeEvent(event_type_)) {
+    return Status::Success;
+  }
+
+  // Check timeout (timeout_ms_ < 0 means infinite wait)
+  if (timeout_ms_ >= 0) {
+    auto elapsed = steady::GetCurrentMs() - start_time_;
+    if (elapsed >= static_cast<uint64_t>(timeout_ms_)) {
+      return Status::Failure;
+    }
+  }
+
+  return Status::Running;
+}
+
+// ============================================================================
+// EventGuard Node
+// ============================================================================
+EventGuard::EventGuard(const std::string& name) : Decorator(name) {}
+
+Status EventGuard::OnStart() {
+  auto event_type_opt = getInput<int32_t>("event_type");
+  if (!event_type_opt) {
+    throw xtils::runtime_error("EventGuard requires event_type input");
+  }
+  event_type_ = *event_type_opt;
+
+  auto mode_opt = getInput<int>("interrupt_mode");
+  immediate_interrupt_ = (mode_opt.value_or(0) == 1);
+
+  auto status_opt = getInput<int>("return_status");
+  interrupt_status_ =
+      (status_opt.value_or(1) == 0) ? Status::Success : Status::Failure;
+
+  interrupted_ = false;
+  return Status::Running;
+}
+
+Status EventGuard::OnTick() {
+  if (!tree_ || children.empty()) {
+    return Status::Failure;
+  }
+
+  // Check for interrupt event
+  if (tree_->hasEvent(event_type_)) {
+    tree_->consumeEvent(event_type_);
+    interrupted_ = true;
+
+    if (immediate_interrupt_) {
+      // Immediate interrupt: stop child and return interrupt status
+      children[0]->reset();
+      return interrupt_status_;
+    }
+    // Deferred interrupt: will interrupt on next tick
+  }
+
+  // If interrupted in deferred mode, return interrupt status
+  if (interrupted_ && !immediate_interrupt_) {
+    children[0]->reset();
+    return interrupt_status_;
+  }
+
+  // Normal execution: tick child
+  return children[0]->tick();
+}
+
+void EventGuard::OnStop() { interrupted_ = false; }
 
 }  // namespace xtils
