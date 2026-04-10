@@ -31,6 +31,12 @@ add_example(websocket_client_example websocket_client_example.cc)
 add_example(common common.cc)
 add_example(bt_example bt_example.cc)
 
+add_custom_command(TARGET bt_example POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/bt_trees
+        ${CMAKE_BINARY_DIR}/examples/bt_trees
+)
+
 # Optional: Create a custom target to build all examples
 add_custom_target(examples
     DEPENDS

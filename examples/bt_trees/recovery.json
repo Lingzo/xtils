@@ -1,0 +1,46 @@
+{
+  "name": "recovery",
+  "root": {
+    "name": "Fallback",
+    "children": [
+      {
+        "name": "Timeout",
+        "ports": {
+          "timeout_ms": 100
+        },
+        "children": [
+          {
+            "name": "Delay",
+            "ports": {
+              "delay_ms": 300
+            },
+            "children": [
+              {
+                "name": "AlwaysSuccess"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Retry",
+        "ports": {
+          "max_retries": 2
+        },
+        "children": [
+          {
+            "name": "Inverter",
+            "children": [
+              {
+                "name": "AlwaysSuccess"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "AlwaysSuccess"
+      }
+    ]
+  }
+}

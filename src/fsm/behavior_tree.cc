@@ -1,6 +1,7 @@
 #include <xtils/fsm/behavior_tree.h>
 #include <xtils/logging/logger.h>
 #include <xtils/utils/exception.h>
+#include <xtils/utils/file_utils.h>
 #include <xtils/utils/time_utils.h>
 
 #include <algorithm>
@@ -168,7 +169,7 @@ Node::Ptr BtFactory::buildNode(const Json& j) {
 
     return node;
   } else {
-    throw xtils::runtime_error("Unknown node type: " + id);
+    throw xtils::runtime_error("Unknown node type: " + name);
   }
 }
 
@@ -181,6 +182,7 @@ BtFactory::BtFactory() {
 
   // decorators
   Register<Delay>("Delay");
+  Register<Timeout>("Timeout");
   Register<Inverter>("Inverter");
   Register<Retry>("Retry");
   Register<Repeater>("Repeater");
@@ -265,7 +267,7 @@ Status Delay::OnStart() {
   return Status::Running;
 }
 Status Delay::OnTick() {
-  if (!children.empty()) return Status::Failure;
+  if (children.empty()) return Status::Failure;
   if (steady::GetCurrentMs() - start_time_ < delay_ms_) {
     return Status::Running;
   } else {
@@ -276,7 +278,7 @@ Status Delay::OnTick() {
 // Inverter node
 Inverter::Inverter(const std::string& name) : Decorator(name) {}
 Status Inverter::OnTick() {
-  if (!children.empty()) return Status::Failure;
+  if (children.empty()) return Status::Failure;
   Status s = children[0]->tick();
   if (s == Status::Running) return Status::Running;
   if (s == Status::Success) return Status::Failure;
@@ -303,9 +305,30 @@ void BtTree::visit_nodes(Node::Ptr& node) {
   node->id_ = ids_.fetch_add(1);
   node->blackboard_ = blackboard_.get();
   node->tree_ = this;  // Set tree reference for event access
-  if (logger_) node->record_ = logger_.get();
+  node->record_ = logger_ ? logger_.get() : nullptr;
+  if (auto subtree_node = std::dynamic_pointer_cast<SubTree>(node);
+      subtree_node && subtree_node->subtree_) {
+    subtree_node->subtree_->inheritRuntimeContext(this, blackboard_,
+                                                  node->record_);
+  }
   for (auto& child : node->children) {
     visit_nodes(child);
+  }
+}
+
+void BtTree::inheritRuntimeContext(BtTree* event_tree,
+                                   const std::shared_ptr<AnyMap>& blackboard,
+                                   BtLogger* logger) {
+  blackboard_ = blackboard;
+  for (auto& node : nodes_) {
+    node->blackboard_ = blackboard_.get();
+    node->tree_ = event_tree;
+    node->record_ = logger;
+    if (auto subtree_node = std::dynamic_pointer_cast<SubTree>(node);
+        subtree_node && subtree_node->subtree_) {
+      subtree_node->subtree_->inheritRuntimeContext(event_tree, blackboard,
+                                                    logger);
+    }
   }
 }
 Status BtTree::tick() {
@@ -454,6 +477,44 @@ void BtTree::clearEvents() {
 // ============================================================================
 void BtFactory::RegisterTree(const std::string& name, const Json& tree_json) {
   registered_trees_[name] = tree_json;
+  auto tree_name = tree_json.get_string("name").value_or("");
+  if (!tree_name.empty()) {
+    registered_trees_[tree_name] = tree_json;
+  }
+}
+
+void BtFactory::LoadTreeFile(const std::string& path) {
+  std::string content;
+  if (!file_utils::read(path, &content) || content.empty()) {
+    throw xtils::runtime_error("Failed to read tree file: " + path);
+  }
+
+  auto json = Json::parse(content);
+  if (!json.has_value() || !json->has_key("root")) {
+    throw xtils::runtime_error("Invalid tree JSON file: " + path);
+  }
+
+  RegisterTree(file_utils::stem(path), *json);
+}
+
+size_t BtFactory::LoadTreesFromDirectory(const std::string& directory) {
+  if (!file_utils::is_directory(directory)) {
+    throw xtils::runtime_error("Tree directory not found: " + directory);
+  }
+
+  auto files = file_utils::list_files(directory);
+  std::sort(files.begin(), files.end());
+
+  size_t loaded = 0;
+  for (const auto& file : files) {
+    if (file_utils::extension(file) != ".json") {
+      continue;
+    }
+    LoadTreeFile(file_utils::join_path(directory, file));
+    ++loaded;
+  }
+
+  return loaded;
 }
 
 std::optional<Json> BtFactory::getRegisteredTree(
@@ -463,6 +524,16 @@ std::optional<Json> BtFactory::getRegisteredTree(
     return it->second;
   }
   return std::nullopt;
+}
+
+BtTree::Ptr BtFactory::buildFromRegisteredTree(
+    const std::string& name, std::shared_ptr<AnyMap> blackboard,
+    std::shared_ptr<BtLogger> logger) {
+  auto tree = getRegisteredTree(name);
+  if (!tree) {
+    throw xtils::runtime_error("Registered tree not found: " + name);
+  }
+  return buildFromJson(*tree, blackboard, logger);
 }
 
 // ============================================================================

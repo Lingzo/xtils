@@ -35,13 +35,13 @@ class RandomSelector : public Composite {
         return xtils::Status::Running;
       }
       if (status == xtils::Status::Success) {
-        current_ = -1;
+        current_ = 0;
         return xtils::Status::Success;
       }
       // Failure, try next child
       current_++;
     }
-    current_ = -1;
+    current_ = 0;
     return xtils::Status::Failure;
   }
 
@@ -53,7 +53,7 @@ class RandomSelector : public Composite {
 class Timeout : public Decorator {
  public:
   Timeout(const std::string& name) : Decorator(name) {}
-  static Ports getPots() { return {xtils::InputPort<double>("timeout_ms")}; }
+  static Ports getPorts() { return {xtils::InputPort<double>("timeout_ms")}; }
 
   xtils::Status OnStart() override {
     start_time_ = xtils::steady::GetCurrentMs();
@@ -66,6 +66,9 @@ class Timeout : public Decorator {
   }
 
   xtils::Status OnTick() override {
+    if (children.empty()) {
+      return xtils::Status::Failure;
+    }
     auto now = xtils::steady::GetCurrentMs();
     if (now - start_time_ >= timeout_ms_) {
       start_time_ = 0;
@@ -97,6 +100,9 @@ class Retry : public Decorator {
     return xtils::Status::Running;
   }
   xtils::Status OnTick() override {
+    if (children.empty()) {
+      return xtils::Status::Failure;
+    }
     while (attempt_count_ < max_retries_) {
       auto status = children[0]->tick();
       if (status == xtils::Status::Success) {
@@ -128,6 +134,9 @@ class Repeater : public Decorator {
     return xtils::Status::Running;
   }
   xtils::Status OnTick() override {
+    if (children.empty()) {
+      return xtils::Status::Failure;
+    }
     while (current_count_ < repeat_count_) {
       auto status = children[0]->tick();
       if (status == xtils::Status::Running) {
@@ -167,10 +176,10 @@ class Fallback : public Composite {
         continue;
       }
       // Success
-      current_ = -1;
+      current_ = 0;
       return xtils::Status::Success;
     }
-    current_ = -1;
+    current_ = 0;
     return xtils::Status::Failure;
   }
 };

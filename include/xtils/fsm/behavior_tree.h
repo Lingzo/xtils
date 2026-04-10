@@ -324,6 +324,9 @@ class BtTree {
 
  private:
   void visit_nodes(Node::Ptr& node);
+  void inheritRuntimeContext(BtTree* event_tree,
+                             const std::shared_ptr<AnyMap>& blackboard,
+                             BtLogger* logger);
   std::string dump_node(const Node& node);
   Json dump_tree_node(const Node& node);
   std::atomic_int ids_{0};
@@ -369,9 +372,14 @@ class BtFactory {
 
   // Register a subtree template by name for SubTree node reference
   void RegisterTree(const std::string& name, const Json& tree_json);
+  void LoadTreeFile(const std::string& path);
+  size_t LoadTreesFromDirectory(const std::string& directory);
 
   // Get a registered tree JSON by name
   std::optional<Json> getRegisteredTree(const std::string& name) const;
+  BtTree::Ptr buildFromRegisteredTree(
+      const std::string& name, std::shared_ptr<AnyMap> blackboard = nullptr,
+      std::shared_ptr<BtLogger> logger = nullptr);
 
   // Build tree from json
   BtTree::Ptr buildFromJson(const Json& j,
@@ -406,6 +414,7 @@ class SubTree : public Decorator {
 
  private:
   friend class BtFactory;
+  friend class BtTree;
   BtTree::Ptr subtree_;
   Json inline_tree_;  // For inline subtree definition
 };

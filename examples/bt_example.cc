@@ -3,91 +3,43 @@
 #include <xtils/fsm/bt_filelogger.h>
 #include <xtils/utils/file_utils.h>
 
+#include <exception>
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "xtils/logging/logger.h"
 
-// Subtree: A simple patrol behavior
-const std::string patrol_subtree = R"(
-{
-  "name": "PatrolSubtree",
-  "root": {
-    "name": "Sequence",
-    "children": [
-      {
-        "name": "PatrolAction",
-        "type": 1
-      },
-      {
-        "name": "Wait",
-        "ports": { "wait_ms": 500 }
-      }
-    ]
-  }
-}
-)";
+namespace {
 
-// Main tree with SubTree, EventGuard, and WaitForEvent
-const std::string example_tree = R"(
-{
-  "name": "MainBehaviorTree",
-  "root": {
-    "name": "Selector",
-    "children": [
-      {
-        "name": "EventGuard",
-        "ports": {
-          "event_type": 100,
-          "interrupt_mode": 1,
-          "return_status": 1
-        },
-        "children": [
-          {
-            "name": "Sequence",
-            "children": [
-              {
-                "name": "Repeater",
-                "ports": { "repeat_count": 3 },
-                "children": [
-                  {
-                    "name": "SubTree",
-                    "ports": { "tree_name": "patrol" }
-                  }
-                ]
-              },
-              {
-                "name": "ActionWithBlackboard",
-                "ports": {
-                  "example_key": 123,
-                  "my_object": "&my_object"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "Sequence",
-        "children": [
-          {
-            "name": "MySimpleAction"
-          },
-          {
-            "name": "WaitForEvent",
-            "ports": {
-              "event_type": 200,
-              "timeout_ms": 3000
-            }
-          },
-          {
-            "name": "EventReceivedAction"
-          }
-        ]
-      }
-    ]
+std::string ResolveTreeDirectory(const std::vector<std::string>& argv) {
+  if (argv.size() > 1 && file_utils::is_directory(argv[1])) {
+    return argv[1];
   }
+
+  std::vector<std::string> candidates = {"./bt_trees", "./examples/bt_trees"};
+  if (!argv.empty()) {
+    auto bin_dir = file_utils::dirname(argv[0]);
+    candidates.push_back(file_utils::join_path(bin_dir, "bt_trees"));
+    candidates.push_back(
+        file_utils::join_path(bin_dir, "../../examples/bt_trees"));
+  }
+
+  for (const auto& candidate : candidates) {
+    if (file_utils::is_directory(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "./bt_trees";
 }
-)";
+
+std::string ResolveMainTreeName(const std::vector<std::string>& argv) {
+  return argv.size() > 2 ? argv[2] : "main";
+}
+
+}  // namespace
 
 class MyClass {
  public:
@@ -121,7 +73,9 @@ class ActionWithBlackboard : public xtils::ActionNode {
         LogW("example_key not found in blackboard");
       }
       auto value_in = getInput<int>("example_key");
-      blackboard_->set("example_key", *value_in + 1);
+      if (value_in) {
+        blackboard_->set("example_key", *value_in + 1);
+      }
       auto obj = getInput<std::shared_ptr<MyClass>>("my_object");
       if (obj && *obj) {
         (*obj)->doSomething();
@@ -161,8 +115,10 @@ class EventReceivedAction : public xtils::ActionNode {
 
 class BtService : public xtils::Service {
  public:
-  BtService() : Service("behavior_tree") {
-    // Register simple actions
+  BtService(std::string tree_dir, std::string main_tree_name)
+      : Service("behavior_tree"),
+        tree_dir_(std::move(tree_dir)),
+        main_tree_name_(std::move(main_tree_name)) {
     factory.RegisterSimpleAction(
         []() {
           LogI("Simple action executed");
@@ -170,17 +126,9 @@ class BtService : public xtils::Service {
         },
         "MySimpleAction");
 
-    // Register custom action nodes
     factory.Register<ActionWithBlackboard>("ActionWithBlackboard");
     factory.Register<PatrolAction>("PatrolAction");
     factory.Register<EventReceivedAction>("EventReceivedAction");
-
-    // Register patrol subtree
-    auto patrol_json = xtils::Json::parse(patrol_subtree);
-    if (patrol_json) {
-      factory.RegisterTree("patrol", patrol_json.value());
-      LogI("Registered subtree: patrol");
-    }
   }
 
   void init() override {
@@ -188,22 +136,17 @@ class BtService : public xtils::Service {
     LogI("%s", factory.dump().c_str());
     file_utils::write("./bt_nodes.json", factory.dump());
 
-    // Build main tree
-    std::string tree_json_str;
-    file_utils::read("./tree_new.json", &tree_json_str);
-    if (tree_json_str.empty()) {
-      tree_json_str = example_tree;
-      LogW("Using default example tree");
-    }
-
-    auto j = xtils::Json::parse(tree_json_str);
-    if (!j.has_value()) {
-      LogE("Failed to parse behavior tree JSON");
+    try {
+      auto loaded = factory.LoadTreesFromDirectory(tree_dir_);
+      LogI("Loaded %zu behavior tree files from %s", loaded, tree_dir_.c_str());
+      tree_ = factory.buildFromRegisteredTree(
+          main_tree_name_, nullptr,
+          std::make_shared<xtils::BtFileLogger>("./bt.log"));
+    } catch (const std::exception& e) {
+      LogE("Failed to initialize behavior tree from %s: %s", tree_dir_.c_str(),
+           e.what());
       return;
     }
-
-    tree_ = factory.buildFromJson(
-        j.value(), nullptr, std::make_shared<xtils::BtFileLogger>("./bt.log"));
 
     file_utils::write("./tree.json", tree_->dumpTree().dump(2));
     LogI("=== Tree Structure ===\n%s", tree_->dump().c_str());
@@ -254,10 +197,13 @@ class BtService : public xtils::Service {
   void deinit() override { LogI("Behavior tree service stopped"); }
 
  private:
+  std::string tree_dir_;
+  std::string main_tree_name_;
   xtils::BtFactory factory;
   xtils::BtTree::Ptr tree_;
 };
 
 void app_main(xtils::App& app, const std::vector<std::string>& argv) {
-  app.registor(std::make_shared<BtService>());
+  app.registor(std::make_shared<BtService>(ResolveTreeDirectory(argv),
+                                           ResolveMainTreeName(argv)));
 }
