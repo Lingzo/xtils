@@ -1,0 +1,25 @@
+{
+  "name": "patrol",
+  "root": {
+    "name": "Sequence",
+    "children": [
+      {
+        "name": "RandomSelector",
+        "children": [
+          {
+            "name": "AlwaysFailure"
+          },
+          {
+            "name": "PatrolAction"
+          }
+        ]
+      },
+      {
+        "name": "Wait",
+        "ports": {
+          "wait_ms": 500
+        }
+      }
+    ]
+  }
+}

@@ -32,3 +32,10 @@ add_example(cron_scheduler_example cron_scheduler_example.cc)
 add_example(websocket_client websocket_client_example.cc)
 add_example(common common.cc)
 add_example(http_client http_client_example.cc)
+add_example(bt_example bt_example.cc)
+
+add_custom_command(TARGET bt_example POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/bt_trees
+        ${CMAKE_BINARY_DIR}/examples/bt_trees
+)

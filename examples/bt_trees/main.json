@@ -1,0 +1,68 @@
+{
+  "name": "main",
+  "root": {
+    "name": "Selector",
+    "children": [
+      {
+        "name": "EventGuard",
+        "ports": {
+          "event_type": 100,
+          "interrupt_mode": 1,
+          "return_status": 1
+        },
+        "children": [
+          {
+            "name": "Sequence",
+            "children": [
+              {
+                "name": "Repeater",
+                "ports": {
+                  "repeat_count": 3
+                },
+                "children": [
+                  {
+                    "name": "SubTree",
+                    "ports": {
+                      "tree_name": "patrol"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "ActionWithBlackboard",
+                "ports": {
+                  "example_key": 123,
+                  "my_object": "&my_object"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Sequence",
+        "children": [
+          {
+            "name": "MySimpleAction"
+          },
+          {
+            "name": "SubTree",
+            "ports": {
+              "tree_name": "recovery"
+            }
+          },
+          {
+            "name": "WaitForEvent",
+            "ports": {
+              "event_type": 200,
+              "timeout_ms": 3000
+            }
+          },
+          {
+            "name": "EventReceivedAction"
+          }
+        ]
+      }
+    ]
+  }
+}

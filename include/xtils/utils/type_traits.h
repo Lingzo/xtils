@@ -13,7 +13,7 @@ constexpr std::string_view type_name() {
   return p.substr(start, end - start);
 #elif defined(__GNUC__)
   std::string_view p = __PRETTY_FUNCTION__;
-  auto start = p.find("with T = ") + 8;
+  auto start = p.find("with T = ") + 9;
   auto end = p.find(';', start);
   return p.substr(start, end - start);
 #elif defined(_MSC_VER)
