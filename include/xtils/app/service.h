@@ -13,8 +13,8 @@ namespace xtils {
 class IService {
  public:
   explicit IService(const char* n) : name(n) {}
-  virtual void init() = 0;
-  virtual void deinit() = 0;
+  virtual void Init() = 0;
+  virtual void Deinit() = 0;
   virtual ~IService() = default;
 
  protected:
@@ -28,14 +28,19 @@ template <typename ServiceType>
 class Service : public IService {
  public:
   explicit Service(const char* n) : IService(n), weak_factory_(this) {}
-  virtual void init() = 0;
-  virtual void deinit() = 0;
+  virtual void Init() = 0;
+  virtual void Deinit() = 0;
   auto GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
 
   template <typename T>
-  void emit(const T& e) {
-    ctx->emit<T>(e);
+  void Emit(const T& e) {
+    ctx->Emit<T>(e);
   }
+
+  // Deprecated wrappers
+  template <typename T>
+  [[deprecated("Use Emit() instead")]]
+  void emit(const T& e) { Emit<T>(e); }
 
  protected:
   WeakPtrFactory<Service<ServiceType>> weak_factory_;
@@ -45,29 +50,43 @@ class Service : public IService {
  * @brief check if the global context is ok
  * @return true if ok
  */
-bool isOk();
+bool IsOk();
 /**
  * @brief init the global context
  * @param args command line arguments
  */
-void init(const std::vector<std::string>& args);
+void Init(const std::vector<std::string>& args);
 
 /**
  * @brief init the global context for backward
  * @param argc number of argv
  * @param argv params const char*
  */
-void init(int argc, const char* const argv[]);
+void Init(int argc, const char* const argv[]);
 /**
  * @brief wait until resource released
  */
-void shutdown();
+void Shutdown();
 /**
  * @brief run the main loop, return when shutdown
  */
-void run_forever();
+void RunForever();
 /**
  * @brief run as a daemon process
  */
-void run_daemon();
+void RunDaemon();
+
+// Deprecated wrappers
+[[deprecated("Use IsOk() instead")]]
+inline bool isOk() { return IsOk(); }
+[[deprecated("Use Init() instead")]]
+inline void init(const std::vector<std::string>& args) { Init(args); }
+[[deprecated("Use Init() instead")]]
+inline void init(int argc, const char* const argv[]) { Init(argc, argv); }
+[[deprecated("Use Shutdown() instead")]]
+inline void shutdown() { Shutdown(); }
+[[deprecated("Use RunForever() instead")]]
+inline void run_forever() { RunForever(); }
+[[deprecated("Use RunDaemon() instead")]]
+inline void run_daemon() { RunDaemon(); }
 }  // namespace xtils

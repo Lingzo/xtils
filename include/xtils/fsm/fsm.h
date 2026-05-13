@@ -86,13 +86,13 @@ class TransitionCondition {
       : name_(name), guard_(std::move(guard)), action_(std::move(action)) {}
 
   // Check if transition is allowed
-  bool canTransition(const State& from, const State& to,
+  bool CanTransition(const State& from, const State& to,
                      EventType event) const {
     return !guard_ || guard_(from, to, event);
   }
 
   // Execute transition action
-  void executeAction(const State& from, const State& to,
+  void ExecuteAction(const State& from, const State& to,
                      EventType event) const {
     if (action_) {
       action_(from, to, event);
@@ -100,6 +100,18 @@ class TransitionCondition {
   }
 
   const std::string& name() const { return name_; }
+
+  // Deprecated wrappers
+  [[deprecated("Use CanTransition() instead")]]
+  bool canTransition(const State& from, const State& to,
+                     EventType event) const {
+    return CanTransition(from, to, event);
+  }
+  [[deprecated("Use ExecuteAction() instead")]]
+  void executeAction(const State& from, const State& to,
+                     EventType event) const {
+    ExecuteAction(from, to, event);
+  }
 
  private:
   std::string name_;
@@ -220,47 +232,111 @@ class FSM {
   FSM& operator=(const FSM&) = delete;
 
   // State management
-  StateId addState(std::unique_ptr<State> state);
-  StateId addState(const std::string& name);
-  StateId addState(const std::string& name, StateCallback on_enter);
-  StateId addState(const std::string& name, StateCallback on_enter,
+  StateId AddState(std::unique_ptr<State> state);
+  StateId AddState(const std::string& name);
+  StateId AddState(const std::string& name, StateCallback on_enter);
+  StateId AddState(const std::string& name, StateCallback on_enter,
                    StateCallback on_exit);
 
   // Transition management
-  void addTransition(const std::string& from, const std::string& to,
+  void AddTransition(const std::string& from, const std::string& to,
                      EventType event,
                      std::shared_ptr<TransitionCondition> condition = nullptr);
-  void addTransition(StateId from, StateId to, EventType event,
+  void AddTransition(StateId from, StateId to, EventType event,
                      std::shared_ptr<TransitionCondition> condition = nullptr);
-  void addTransition(const std::string& from, const std::string& to,
+  void AddTransition(const std::string& from, const std::string& to,
                      const std::vector<EventType>& events,
                      std::shared_ptr<TransitionCondition> condition = nullptr);
 
   // FSM control
-  void start(const std::string& initial_state);
-  void start(StateId initial_state_id);
-  void reset(const std::string& state);
-  void reset(StateId state_id);
-  void processEvent(EventType event);
+  void Start(const std::string& initial_state);
+  void Start(StateId initial_state_id);
+  void Reset(const std::string& state);
+  void Reset(StateId state_id);
+  void ProcessEvent(EventType event);
 
   // State queries
-  bool isInState(const std::string& state_name) const;
-  bool isInState(StateId state_id) const;
-  std::optional<std::string> getCurrentStateName() const;
-  std::optional<StateId> getCurrentStateId() const;
+  bool IsInState(const std::string& state_name) const;
+  bool IsInState(StateId state_id) const;
+  std::optional<std::string> GetCurrentStateName() const;
+  std::optional<StateId> GetCurrentStateId() const;
 
   // Utility functions
-  StateId getStateId(const std::string& name) const;
-  std::optional<std::string> getStateName(StateId id) const;
-  std::string toDotGraph() const;
+  std::optional<StateId> GetStateId(const std::string& name) const;
+  std::optional<std::string> GetStateName(StateId id) const;
+  std::string ToDotGraph() const;
 
   // History and debugging
-  const std::vector<HistoryEntry>& getHistory() const;
-  void clearHistory();
-  void setMaxHistorySize(std::size_t size);
+  const std::vector<HistoryEntry>& GetHistory() const;
+  void ClearHistory();
+  void SetMaxHistorySize(std::size_t size);
 
   // Thread safety
-  void enableThreadSafety(bool enable = true) { thread_safe_ = enable; }
+  void EnableThreadSafety(bool enable = true) { thread_safe_ = enable; }
+
+  // Deprecated wrappers
+  [[deprecated("Use AddState() instead")]]
+  StateId addState(std::unique_ptr<State> state) { return AddState(std::move(state)); }
+  [[deprecated("Use AddState() instead")]]
+  StateId addState(const std::string& name) { return AddState(name); }
+  [[deprecated("Use AddState() instead")]]
+  StateId addState(const std::string& name, StateCallback on_enter) {
+    return AddState(name, std::move(on_enter));
+  }
+  [[deprecated("Use AddState() instead")]]
+  StateId addState(const std::string& name, StateCallback on_enter,
+                   StateCallback on_exit) {
+    return AddState(name, std::move(on_enter), std::move(on_exit));
+  }
+  [[deprecated("Use AddTransition() instead")]]
+  void addTransition(const std::string& from, const std::string& to,
+                     EventType event,
+                     std::shared_ptr<TransitionCondition> condition = nullptr) {
+    AddTransition(from, to, event, std::move(condition));
+  }
+  [[deprecated("Use AddTransition() instead")]]
+  void addTransition(StateId from, StateId to, EventType event,
+                     std::shared_ptr<TransitionCondition> condition = nullptr) {
+    AddTransition(from, to, event, std::move(condition));
+  }
+  [[deprecated("Use AddTransition() instead")]]
+  void addTransition(const std::string& from, const std::string& to,
+                     const std::vector<EventType>& events,
+                     std::shared_ptr<TransitionCondition> condition = nullptr) {
+    AddTransition(from, to, events, std::move(condition));
+  }
+  [[deprecated("Use Start() instead")]]
+  void start(const std::string& initial_state) { Start(initial_state); }
+  [[deprecated("Use Start() instead")]]
+  void start(StateId initial_state_id) { Start(initial_state_id); }
+  [[deprecated("Use Reset() instead")]]
+  void reset(const std::string& state) { Reset(state); }
+  [[deprecated("Use Reset() instead")]]
+  void reset(StateId state_id) { Reset(state_id); }
+  [[deprecated("Use ProcessEvent() instead")]]
+  void processEvent(EventType event) { ProcessEvent(event); }
+  [[deprecated("Use IsInState() instead")]]
+  bool isInState(const std::string& state_name) const { return IsInState(state_name); }
+  [[deprecated("Use IsInState() instead")]]
+  bool isInState(StateId state_id) const { return IsInState(state_id); }
+  [[deprecated("Use GetCurrentStateName() instead")]]
+  std::optional<std::string> getCurrentStateName() const { return GetCurrentStateName(); }
+  [[deprecated("Use GetCurrentStateId() instead")]]
+  std::optional<StateId> getCurrentStateId() const { return GetCurrentStateId(); }
+  [[deprecated("Use GetStateId() instead")]]
+  std::optional<StateId> getStateId(const std::string& name) const { return GetStateId(name); }
+  [[deprecated("Use GetStateName() instead")]]
+  std::optional<std::string> getStateName(StateId id) const { return GetStateName(id); }
+  [[deprecated("Use ToDotGraph() instead")]]
+  std::string toDotGraph() const { return ToDotGraph(); }
+  [[deprecated("Use GetHistory() instead")]]
+  const std::vector<HistoryEntry>& getHistory() const { return GetHistory(); }
+  [[deprecated("Use ClearHistory() instead")]]
+  void clearHistory() { ClearHistory(); }
+  [[deprecated("Use SetMaxHistorySize() instead")]]
+  void setMaxHistorySize(std::size_t size) { SetMaxHistorySize(size); }
+  [[deprecated("Use EnableThreadSafety() instead")]]
+  void enableThreadSafety(bool enable = true) { EnableThreadSafety(enable); }
 
  private:
   StateId generateId() { return ++state_ids_; }
@@ -296,20 +372,37 @@ class FSM {
 };
 
 // Helper functions for creating conditions
-inline std::shared_ptr<TransitionCondition> makeGuard(const std::string& name,
+inline std::shared_ptr<TransitionCondition> MakeGuard(const std::string& name,
                                                       TransitionGuard guard) {
   return std::make_shared<TransitionCondition>(name, std::move(guard));
 }
 
-inline std::shared_ptr<TransitionCondition> makeAction(
+inline std::shared_ptr<TransitionCondition> MakeAction(
     const std::string& name, TransitionAction action) {
   return std::make_shared<TransitionCondition>(name, std::move(action));
 }
 
-inline std::shared_ptr<TransitionCondition> makeCondition(
+inline std::shared_ptr<TransitionCondition> MakeCondition(
     const std::string& name, TransitionGuard guard, TransitionAction action) {
   return std::make_shared<TransitionCondition>(name, std::move(guard),
                                                std::move(action));
+}
+
+// Deprecated wrappers
+[[deprecated("Use MakeGuard() instead")]]
+inline std::shared_ptr<TransitionCondition> makeGuard(const std::string& name,
+                                                      TransitionGuard guard) {
+  return MakeGuard(name, std::move(guard));
+}
+[[deprecated("Use MakeAction() instead")]]
+inline std::shared_ptr<TransitionCondition> makeAction(
+    const std::string& name, TransitionAction action) {
+  return MakeAction(name, std::move(action));
+}
+[[deprecated("Use MakeCondition() instead")]]
+inline std::shared_ptr<TransitionCondition> makeCondition(
+    const std::string& name, TransitionGuard guard, TransitionAction action) {
+  return MakeCondition(name, std::move(guard), std::move(action));
 }
 
 }  // namespace fsm

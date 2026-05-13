@@ -224,7 +224,7 @@ class CronScheduler {
           } else {
             tm.tm_sec = *it;
           }
-          mktime(&tm);
+          timegm(&tm);
           continue;
         }
 
@@ -237,7 +237,7 @@ class CronScheduler {
             tm.tm_min = *it;
           }
           tm.tm_sec = t.seconds.empty() ? 0 : *t.seconds.begin();
-          mktime(&tm);
+          timegm(&tm);
           continue;
         }
 
@@ -251,7 +251,7 @@ class CronScheduler {
           }
           tm.tm_min = t.minutes.empty() ? 0 : *t.minutes.begin();
           tm.tm_sec = t.seconds.empty() ? 0 : *t.seconds.begin();
-          mktime(&tm);
+          timegm(&tm);
           continue;
         }
 
@@ -260,7 +260,7 @@ class CronScheduler {
           tm.tm_hour = t.hours.empty() ? 0 : *t.hours.begin();
           tm.tm_min = t.minutes.empty() ? 0 : *t.minutes.begin();
           tm.tm_sec = t.seconds.empty() ? 0 : *t.seconds.begin();
-          mktime(&tm);
+          timegm(&tm);
           continue;
         }
 
@@ -276,7 +276,7 @@ class CronScheduler {
           tm.tm_hour = t.hours.empty() ? 0 : *t.hours.begin();
           tm.tm_min = t.minutes.empty() ? 0 : *t.minutes.begin();
           tm.tm_sec = t.seconds.empty() ? 0 : *t.seconds.begin();
-          mktime(&tm);
+          timegm(&tm);
           continue;
         }
 
@@ -286,7 +286,7 @@ class CronScheduler {
           tm.tm_hour = t.hours.empty() ? 0 : *t.hours.begin();
           tm.tm_min = t.minutes.empty() ? 0 : *t.minutes.begin();
           tm.tm_sec = t.seconds.empty() ? 0 : *t.seconds.begin();
-          mktime(&tm);
+          timegm(&tm);
           continue;
         }
       }

@@ -2,12 +2,12 @@
 #include <xtils/logging/logger.h>
 
 int main(int argc, char* argv[]) {
-  xtils::init(argc, argv);
-  xtils::run_daemon();
-  while (xtils::isOk()) {
+  xtils::Init(argc, argv);
+  xtils::RunDaemon();
+  while (xtils::IsOk()) {
     LogThis();
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
-  xtils::shutdown();  // block until resource release
+  xtils::Shutdown();  // block until resource release
   return 0;
 }

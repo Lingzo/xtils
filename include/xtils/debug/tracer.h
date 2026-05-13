@@ -11,16 +11,19 @@
 #include <string>
 
 #ifdef ENABLE_TRACE_RECORDING
-#define TRACE_SCOPE(name) TraceScopeRAII __trace_scope_raii_##__LINE__(name)
-#define TRACE_INSTANT(name) Tracer::instance().recordInstant(name)
-#define TRACE_DATA(p_str) Tracer::instance().data(p_str)
-#define TRACE_SAVE(filename) Tracer::instance().save(filename)
+#define TRACE_SCOPE(name) xtils::debug::TraceScopeRAII __trace_scope_raii_##__LINE__(name)
+#define TRACE_INSTANT(name) xtils::debug::Tracer::instance().recordInstant(name)
+#define TRACE_DATA(p_str) xtils::debug::Tracer::instance().data(p_str)
+#define TRACE_SAVE(filename) xtils::debug::Tracer::instance().save(filename)
 #else
 #define TRACE_SCOPE(name)
 #define TRACE_INSTANT(name)
 #define TRACE_DATA(p_str)
 #define TRACE_SAVE(filename)
 #endif
+
+namespace xtils {
+namespace debug {
 
 class Tracer {
  public:
@@ -83,7 +86,7 @@ class Tracer {
 
   static constexpr size_t MAX_EVENTS = 1e4;
 
-  Tracer() : write_index_(0) { events_ = new Event[MAX_EVENTS]; }
+  Tracer() : write_index_(0), full_(false) { events_ = new Event[MAX_EVENTS]; }
 
   ~Tracer() { delete[] events_; }
 
@@ -190,7 +193,7 @@ class Tracer {
     return cached_pid;
   }
   void pushEvent(const Event &e) {
-    size_t idx = write_index_.fetch_add(1, std::memory_order_relaxed);
+    size_t idx = write_index_.fetch_add(1, std::memory_order_release);
     if (idx >= MAX_EVENTS) {
       full_ = true;
     }
@@ -199,7 +202,7 @@ class Tracer {
 
   std::atomic<size_t> write_index_;
   Event *events_;
-  bool full_;
+  std::atomic<bool> full_{false};
 };
 
 // RAII 范围事件
@@ -208,3 +211,10 @@ class TraceScopeRAII {
   TraceScopeRAII(const char *name) { Tracer::instance().begin(name); }
   ~TraceScopeRAII() { Tracer::instance().end(); }
 };
+
+}  // namespace debug
+}  // namespace xtils
+
+// Backward compatibility
+using Tracer = xtils::debug::Tracer;
+using TraceScopeRAII = xtils::debug::TraceScopeRAII;

@@ -23,7 +23,7 @@ struct HttpRequest {
   explicit HttpRequest(HttpServerConnection* c) : conn(c) {}
 
   // Gets the value of a header with the given name, if it exists.
-  std::optional<std::string> GetHeader(StringView name) const;
+  std::optional<std::string> GetHeader(std::string_view name) const;
 
   // A pointer to the HttpServerConnection that this request belongs to.
   HttpServerConnection* conn;
@@ -31,13 +31,13 @@ struct HttpRequest {
   // These StringViews point to memory in the rxbuf owned by |conn|. They are
   // valid only within the OnHttpRequest() call.
   // The HTTP method (e.g., "GET", "POST").
-  StringView method;
+  std::string_view method;
   // The URI of the request.
-  StringView uri;
+  std::string_view uri;
   // The origin of the request, if provided in the headers.
-  StringView origin;
+  std::string_view origin;
   // The body of the request.
-  StringView body;
+  std::string_view body;
   HttpHeaders params;
 
   static constexpr uint32_t kMaxHeaders = 32;
@@ -62,7 +62,7 @@ struct WebsocketMessage {
   // Holds onto the connection's |rxbuf|. This is valid only within the scope
   // of the OnWebsocketMessage() callback.
   // The data of the WebSocket message.
-  StringView data;
+  std::string_view data;
 
   // If false, the payload contains binary data. If true, it's supposed to
   // contain text. Note that there is no guarantee this will be the case. This
@@ -81,10 +81,10 @@ class HttpServerConnection {
 
   // All the above in one shot.
   void SendResponse(const char* http_code, const HttpHeaders& headers = {},
-                    StringView content = {}, bool force_close = false);
+                    std::string_view content = {}, bool force_close = false);
   void SendResponseAndClose(const char* http_code,
                             const HttpHeaders& headers = {},
-                            StringView content = {}) {
+                            std::string_view content = {}) {
     SendResponse(http_code, headers, content, true);
   }
 
@@ -98,7 +98,7 @@ class HttpServerConnection {
   void UpgradeToWebsocket(const HttpRequest&);
   void SendWebsocketMessageText(const void* data, size_t len);
   void SendWebsocketMessage(const void* data, size_t len);
-  void SendWebsocketMessage(StringView sv) {
+  void SendWebsocketMessage(std::string_view sv) {
     SendWebsocketMessage(sv.data(), sv.size());
   }
   void SendWebsocketFrame(WebSocketOpcode opcode, const void* payload,
@@ -157,7 +157,7 @@ class HttpServer : public UnixSocket::EventListener {
   size_t ParseOneHttpRequest(HttpServerConnection*);
   size_t ParseOneWebsocketFrame(HttpServerConnection*);
   void HandleCorsPreflightRequest(const HttpRequest&);
-  bool IsOriginAllowed(StringView);
+  bool IsOriginAllowed(std::string_view);
 
   // UnixSocket::EventListener implementation.
   void OnNewIncomingConnection(UnixSocket*,

@@ -5,9 +5,9 @@
 
 __attribute__((weak)) int main(int argc, const char* const* argv) {
   std::vector<std::string> args(argv, argv + argc);
-  xtils::init(args);
-  auto app = xtils::App::ins();
+  xtils::Init(args);
+  auto app = xtils::App::Ins();
   app_main(*app, args);
-  xtils::run_forever();
+  xtils::RunForever();
   return 0;
 }

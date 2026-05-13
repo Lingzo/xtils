@@ -207,7 +207,7 @@ void SignalHandler::HandleCrashSignal(int sig, siginfo_t* info, void* context) {
 
   ss << GetStackTrace() << std::endl;
   ss << "=== END CRASH REPORT ===" << std::endl;
-  logger::default_logger()->write_raw(ss.str());
+  logger::DefaultLogger()->WriteRaw(ss.str());
   // Restore default handler and re-raise the signal
   signal(sig, SIG_DFL);
   raise(sig);

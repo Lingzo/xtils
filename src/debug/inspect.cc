@@ -16,9 +16,7 @@
 #include "xtils/utils/exception.h"
 #include "xtils/utils/file_utils.h"
 #include "xtils/utils/json.h"
-#include "xtils/utils/micros.h"
 #include "xtils/utils/string_utils.h"
-#include "xtils/utils/string_view.h"
 
 namespace {
 std::string formatSeconds(uint64_t seconds) {
@@ -71,7 +69,7 @@ std::map<std::string, std::string> getProcessStatusMap() {
     result["thread_count"] = stats[19];
   }
 
-  utils::Try([&result] {
+  xtils::Try([&result] {
     size_t fd_count = file_utils::list_directory("/proc/self/fd").size();
     result["fd_count"] = std::to_string(fd_count);
   });
@@ -433,7 +431,7 @@ class Impl : public HttpRequestHandler {
       Inspect::Request ws_req;
       ws_req.path = ExtractPath(path);
       ws_req.query = ParseQueryParams(path);
-      ws_req.body = msg.data.ToStr();
+      ws_req.body = std::string(msg.data);
       ws_req.is_websocket = true;
       ws_req.is_text = msg.is_text;
       ws_req.connection = static_cast<void*>(msg.conn);
@@ -511,7 +509,7 @@ class Impl : public HttpRequestHandler {
 
   void HandleWebSocketUpgrade(const HttpRequest& req) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    std::string path = ExtractPath(req.uri.ToStr());
+    std::string path = ExtractPath(std::string(req.uri));
 
     // Check if WebSocket is supported for this path
     if (!HasWebSocketHandler(path)) {
@@ -521,7 +519,7 @@ class Impl : public HttpRequestHandler {
       error["error"] = "WebSocket not supported for this path";
       std::string json_body = error.dump();
       req.conn->SendResponseAndClose("400 Bad Request", headers,
-                                     StringView(json_body));
+                                     json_body);
       return;
     }
 
@@ -531,7 +529,7 @@ class Impl : public HttpRequestHandler {
   }
 
   void HandleHttpRequest(const HttpRequest& http_req) {
-    std::string uri_str = http_req.uri.ToStr();
+    std::string uri_str = std::string(http_req.uri);
     std::string path = ExtractPath(uri_str);
     auto query_params = ParseQueryParams(uri_str);
 
@@ -545,7 +543,7 @@ class Impl : public HttpRequestHandler {
     Inspect::Request req;
     req.path = path;
     req.query = std::move(query_params);
-    req.body = http_req.body.ToStr();
+    req.body = std::string(http_req.body);
 
     // Find handler
     Inspect::Response response;
@@ -574,7 +572,7 @@ class Impl : public HttpRequestHandler {
           {"Access-Control-Allow-Headers", "Content-Type, Authorization"});
     }
     http_req.conn->SendResponse(response.status.c_str(), headers,
-                                StringView(response.content));
+                                response.content);
   }
 
   void RemoveWebSocketConnection(HttpServerConnection* conn) {
@@ -672,7 +670,10 @@ Inspect::Inspect() : task_runner_(ThreadTaskRunner::CreateAndStart("inspect")) {
   impl_ = new Impl();
 }
 
-Inspect::~Inspect() { SAFE_DELETE_OBJ(impl_); }
+Inspect::~Inspect() {
+  delete impl_;
+  impl_ = nullptr;
+}
 
 void Inspect::Init(const std::string& ip, int port) {
   if (impl_) impl_->Init(&task_runner_, ip, port);

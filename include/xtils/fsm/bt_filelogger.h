@@ -14,7 +14,7 @@
 #include <fstream>
 #include <string>
 
-#include "behavior_tree.h"
+#include "xtils/fsm/behavior_tree.h"
 
 namespace xtils {
 class BtFileLogger : public BtLogger {

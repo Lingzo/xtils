@@ -131,7 +131,7 @@ class BtService : public xtils::Service<BtService> {
     factory.Register<EventReceivedAction>("EventReceivedAction");
   }
 
-  void init() override {
+  void Init() override {
     LogI("=== Behavior Tree Factory Nodes ===");
     LogI("%s", factory.dump().c_str());
     file_utils::write("./bt_nodes.json", factory.dump());
@@ -157,7 +157,7 @@ class BtService : public xtils::Service<BtService> {
     blackboard.set("my_object", std::make_shared<MyClass>());
 
     // Main tick loop
-    ctx->every(500, [this]() {
+    ctx->Every(500, [this]() {
       if (tree_->isPaused()) {
         LogI("Tree is paused, skipping tick");
         return;
@@ -167,34 +167,34 @@ class BtService : public xtils::Service<BtService> {
     });
 
     // Demo: Send interrupt event after 3 seconds
-    ctx->delay(3000, [this]() {
+    ctx->Delay(3000, [this]() {
       LogI(">>> Sending interrupt event (type=100) to stop patrol <<<");
       tree_->sendEvent(100);
     });
 
     // Demo: Send event 200 after 5 seconds
-    ctx->delay(5000, [this]() {
+    ctx->Delay(5000, [this]() {
       LogI(">>> Sending event (type=200) <<<");
       tree_->sendEvent(200);
     });
 
     // Demo: Pause tree after 7 seconds
-    ctx->delay(7000, [this]() {
+    ctx->Delay(7000, [this]() {
       LogI(">>> Pausing tree <<<");
       tree_->pause();
     });
 
     // Demo: Resume tree after 9 seconds
-    ctx->delay(9000, [this]() {
+    ctx->Delay(9000, [this]() {
       LogI(">>> Resuming tree <<<");
       tree_->resume();
     });
 
     // Demo: Log finish after 12 seconds
-    ctx->delay(12000, [this]() { LogI(">>> Demo finished <<<"); });
+    ctx->Delay(12000, [this]() { LogI(">>> Demo finished <<<"); });
   }
 
-  void deinit() override { LogI("Behavior tree service stopped"); }
+  void Deinit() override { LogI("Behavior tree service stopped"); }
 
  private:
   std::string tree_dir_;
@@ -204,6 +204,6 @@ class BtService : public xtils::Service<BtService> {
 };
 
 void app_main(xtils::App& app, const std::vector<std::string>& argv) {
-  app.registor(std::make_shared<BtService>(ResolveTreeDirectory(argv),
+  app.Register(std::make_shared<BtService>(ResolveTreeDirectory(argv),
                                            ResolveMainTreeName(argv)));
 }

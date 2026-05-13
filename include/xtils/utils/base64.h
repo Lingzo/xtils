@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -21,7 +22,7 @@ ssize_t Base64Encode(const void* src, size_t src_size, char* dst,
 
 std::string Base64Encode(const void* src, size_t src_size);
 
-inline std::string Base64Encode(StringView sv) {
+inline std::string Base64Encode(std::string_view sv) {
   return Base64Encode(sv.data(), sv.size());
 }
 
@@ -31,7 +32,7 @@ ssize_t Base64Decode(const char* src, size_t src_size, uint8_t* dst,
 
 std::optional<std::string> Base64Decode(const char* src, size_t src_size);
 
-inline std::optional<std::string> Base64Decode(StringView sv) {
+inline std::optional<std::string> Base64Decode(std::string_view sv) {
   return Base64Decode(sv.data(), sv.size());
 }
 

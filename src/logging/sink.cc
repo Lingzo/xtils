@@ -22,6 +22,7 @@
 #include "xtils/debug/tracer.h"
 #include "xtils/utils/file_utils.h"
 
+namespace xtils {
 namespace logger {
 
 void ConsoleSink::write(const char* buf, std::size_t start, std::size_t len) {
@@ -101,11 +102,10 @@ class FileSink::Impl {
 };
 
 FileSink::FileSink(const std::string& path, std::size_t max_bytes,
-                   std::size_t max_items) {
-  impl = new Impl(path, max_bytes, max_items);
-}
+                   std::size_t max_items)
+    : impl(std::make_unique<Impl>(path, max_bytes, max_items)) {}
 
-FileSink::~FileSink() { delete impl; }
+FileSink::~FileSink() = default;
 void FileSink::write(const char* buf, std::size_t start, std::size_t len) {
   impl->write(buf, start, len);
 }
@@ -113,3 +113,4 @@ void FileSink::write(const char* buf, std::size_t start, std::size_t len) {
 void FileSink::flush() { impl->flush(); }
 
 }  // namespace logger
+}  // namespace xtils

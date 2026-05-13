@@ -15,23 +15,23 @@ static bool starts_with(const std::string& str, const std::string& prefix) {
          str.substr(0, prefix.length()) == prefix;
 }
 
-Config& Config::define(const std::string& name, const std::string& description,
+Config& Config::Define(const std::string& name, const std::string& description,
                        const Json& default_value, bool required) {
   options_[name] = Option(name, description, default_value, required);
 
   // Apply default value immediately if not already set
-  if (!has(name)) {
-    set(name, default_value);
+  if (!Has(name)) {
+    Set(name, default_value);
   }
 
   return *this;
 }
 
-bool Config::parse_args(int argc, const char** argv, bool allow_exit) {
-  return parse_args(std::vector<std::string>(argv, argv + argc), allow_exit);
+bool Config::ParseArgs(int argc, const char** argv, bool allow_exit) {
+  return ParseArgs(std::vector<std::string>(argv, argv + argc), allow_exit);
 }
 
-bool Config::parse_args(const std::vector<std::string>& args, bool allow_exit) {
+bool Config::ParseArgs(const std::vector<std::string>& args, bool allow_exit) {
   // First, apply default values
   apply_defaults();
   no_parsed_.clear();
@@ -49,7 +49,7 @@ bool Config::parse_args(const std::vector<std::string>& args, bool allow_exit) {
     }
     // Load config file if specified
     if (!config_file.empty()) {
-      if (!load_file(config_file)) {
+      if (!LoadFile(config_file)) {
         LogE("Failed to load config file: %s", config_file.c_str());
         return false;
       }
@@ -63,11 +63,11 @@ bool Config::parse_args(const std::vector<std::string>& args, bool allow_exit) {
 
     // Skip help flags
     if ((arg == "-h" || arg == "--help") && allow_exit) {
-      std::cout << help() << std::endl;
+      std::cout << Help() << std::endl;
       _exit(0);
     }
     if (arg == "--dump" && allow_exit) {
-      print();
+      Print();
       _exit(0);
     }
 
@@ -118,7 +118,7 @@ bool Config::parse_args(const std::vector<std::string>& args, bool allow_exit) {
 
     // For boolean options, if no value is provided, treat as true
     if (!has_value && option_it->second.default_value.is_bool()) {
-      set(key, Json(true));
+      Set(key, Json(true));
     } else if (!has_value) {
       LogE("Option %s requires a value", key.c_str());
       return false;
@@ -130,14 +130,14 @@ bool Config::parse_args(const std::vector<std::string>& args, bool allow_exit) {
              value_str.c_str());
         return false;
       }
-      set(key, parsed_value.value());
+      Set(key, parsed_value.value());
     }
   }
 
-  return validate();
+  return Validate();
 }
 
-bool Config::load_file(const std::string& filename) {
+bool Config::LoadFile(const std::string& filename) {
   std::ifstream file(filename);
   if (!file.is_open()) {
     LogE("Failed to open config file: %s", filename.c_str());
@@ -148,18 +148,18 @@ bool Config::load_file(const std::string& filename) {
   buffer << file.rdbuf();
   file.close();
 
-  return parse(buffer.str());
+  return Parse(buffer.str());
 }
 
-bool Config::parse(const std::string& json_content) {
+bool Config::Parse(const std::string& json_content) {
   auto json = Json::parse(json_content);
   if (!json) {
     LogE("Failed to parse JSON configuration");
     return false;
   }
-  return parse_json(*json);
+  return ParseJson(*json);
 }
-bool Config::parse_json(const Json& json) {
+bool Config::ParseJson(const Json& json) {
   // Apply defaults first
   apply_defaults();
 
@@ -168,28 +168,30 @@ bool Config::parse_json(const Json& json) {
     data_ = merge_objects(data_, json);
   }
 
-  return validate();
+  return Validate();
 }
 
-std::string Config::get_string(const std::string& path) const {
-  return get<std::string>(path);
+std::optional<std::string> Config::GetString(const std::string& path) const {
+  return Get<std::string>(path);
 }
 
-int64_t Config::get_int(const std::string& path) const {
-  return get<int64_t>(path);
+std::optional<int64_t> Config::GetInt(const std::string& path) const {
+  return Get<int64_t>(path);
 }
 
-double Config::get_double(const std::string& path) const {
-  return get<double>(path);
+std::optional<double> Config::GetDouble(const std::string& path) const {
+  return Get<double>(path);
 }
 
-bool Config::get_bool(const std::string& path) const { return get<bool>(path); }
-
-bool Config::has(const std::string& path) const {
-  return get(path).has_value();
+std::optional<bool> Config::GetBool(const std::string& path) const {
+  return Get<bool>(path);
 }
 
-void Config::set(const std::string& path, const Json& value) {
+bool Config::Has(const std::string& path) const {
+  return Get(path).has_value();
+}
+
+void Config::Set(const std::string& path, const Json& value) {
   auto parts = split_path(path);
   if (parts.empty()) return;
 
@@ -222,8 +224,8 @@ void Config::set(const std::string& path, const Json& value) {
   (*current)[parts.back()] = value;
 }
 
-bool Config::validate() const {
-  auto missing = missing_required();
+bool Config::Validate() const {
+  auto missing = MissingRequired();
   if (!missing.empty()) {
     std::stringstream ss;
     ss << "Missing required options: ";
@@ -237,7 +239,7 @@ bool Config::validate() const {
   return true;
 }
 
-std::string Config::help() const {
+std::string Config::Help() const {
   std::ostringstream oss;
   oss << "Configuration Options:\n";
   oss << "  --config-file <file>\n";
@@ -266,11 +268,11 @@ std::string Config::help() const {
   return oss.str();
 }
 
-std::vector<std::string> Config::missing_required() const {
+std::vector<std::string> Config::MissingRequired() const {
   std::vector<std::string> missing;
 
   for (const auto& [name, option] : options_) {
-    if (option.required && !has(name)) {
+    if (option.required && !Has(name)) {
       missing.push_back(name);
     }
   }
@@ -278,23 +280,23 @@ std::vector<std::string> Config::missing_required() const {
   return missing;
 }
 
-void Config::print() const { std::cout << data_.dump(2) << std::endl; }
+void Config::Print() const { std::cout << data_.dump(2) << std::endl; }
 
-Json Config::to_json() const { return data_; }
+Json Config::ToJson() const { return data_; }
 
-bool Config::save(const std::string& filename) const {
+bool Config::Save(const std::string& filename) const {
   std::ofstream file(filename);
   if (!file.is_open()) {
     LogE("Failed to create config file: %s", filename.c_str());
     return false;
   }
 
-  file << to_string();
+  file << ToString();
   file.close();
   return true;
 }
 
-std::string Config::to_string() const { return data_.dump(2); }
+std::string Config::ToString() const { return data_.dump(2); }
 
 std::optional<Json> Config::parse_value(const std::string& value_str,
                                         const Json& default_value) const {
@@ -331,8 +333,8 @@ std::optional<Json> Config::parse_value(const std::string& value_str,
 
 void Config::apply_defaults() {
   for (const auto& [name, option] : options_) {
-    if (!has(name)) {
-      set(name, option.default_value);
+    if (!Has(name)) {
+      Set(name, option.default_value);
     }
   }
 }
@@ -351,7 +353,7 @@ std::vector<std::string> Config::split_path(const std::string& path) const {
   return parts;
 }
 
-std::optional<Json> Config::get(const std::string& path) const {
+std::optional<Json> Config::Get(const std::string& path) const {
   auto parts = split_path(path);
   if (parts.empty()) return std::nullopt;
 

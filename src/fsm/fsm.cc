@@ -26,7 +26,7 @@ namespace fsm {
 
 // FSM Implementation
 
-StateId FSM::addState(std::unique_ptr<State> state) {
+StateId FSM::AddState(std::unique_ptr<State> state) {
   return withLock([&]() -> StateId {
     if (!state) {
       throw FSMException("Cannot add null state");
@@ -47,29 +47,31 @@ StateId FSM::addState(std::unique_ptr<State> state) {
   });
 }
 
-StateId FSM::addState(const std::string& name) {
-  return addState(std::make_unique<State>(name));
+StateId FSM::AddState(const std::string& name) {
+  return AddState(std::make_unique<State>(name));
 }
 
-StateId FSM::addState(const std::string& name, StateCallback on_enter) {
-  return addState(std::make_unique<State>(name, std::move(on_enter)));
+StateId FSM::AddState(const std::string& name, StateCallback on_enter) {
+  return AddState(std::make_unique<State>(name, std::move(on_enter)));
 }
 
-StateId FSM::addState(const std::string& name, StateCallback on_enter,
+StateId FSM::AddState(const std::string& name, StateCallback on_enter,
                       StateCallback on_exit) {
-  return addState(
+  return AddState(
       std::make_unique<State>(name, std::move(on_enter), std::move(on_exit)));
 }
 
-void FSM::addTransition(const std::string& from, const std::string& to,
+void FSM::AddTransition(const std::string& from, const std::string& to,
                         EventType event,
                         std::shared_ptr<TransitionCondition> condition) {
-  StateId from_id = getStateId(from);
-  StateId to_id = getStateId(to);
-  addTransition(from_id, to_id, event, std::move(condition));
+  auto from_id = GetStateId(from);
+  if (!from_id) throw StateNotFoundException(from);
+  auto to_id = GetStateId(to);
+  if (!to_id) throw StateNotFoundException(to);
+  AddTransition(*from_id, *to_id, event, std::move(condition));
 }
 
-void FSM::addTransition(StateId from, StateId to, EventType event,
+void FSM::AddTransition(StateId from, StateId to, EventType event,
                         std::shared_ptr<TransitionCondition> condition) {
   withLock([&]() {
     State* from_state = getState(from);
@@ -88,26 +90,29 @@ void FSM::addTransition(StateId from, StateId to, EventType event,
   });
 }
 
-void FSM::addTransition(const std::string& from, const std::string& to,
+void FSM::AddTransition(const std::string& from, const std::string& to,
                         const std::vector<EventType>& events,
                         std::shared_ptr<TransitionCondition> condition) {
-  StateId from_id = getStateId(from);
-  StateId to_id = getStateId(to);
+  auto from_id = GetStateId(from);
+  if (!from_id) throw StateNotFoundException(from);
+  auto to_id = GetStateId(to);
+  if (!to_id) throw StateNotFoundException(to);
 
   for (EventType event : events) {
     // Create a copy of the condition for each event
     auto condition_copy =
         condition ? std::make_shared<TransitionCondition>(*condition) : nullptr;
-    addTransition(from_id, to_id, event, std::move(condition_copy));
+    AddTransition(*from_id, *to_id, event, std::move(condition_copy));
   }
 }
 
-void FSM::start(const std::string& initial_state) {
-  StateId id = getStateId(initial_state);
-  start(id);
+void FSM::Start(const std::string& initial_state) {
+  auto id = GetStateId(initial_state);
+  if (!id) throw StateNotFoundException(initial_state);
+  Start(*id);
 }
 
-void FSM::start(StateId initial_state_id) {
+void FSM::Start(StateId initial_state_id) {
   withLock([&]() {
     State* state = getState(initial_state_id);
     if (!state) {
@@ -126,12 +131,13 @@ void FSM::start(StateId initial_state_id) {
   });
 }
 
-void FSM::reset(const std::string& state) {
-  StateId id = getStateId(state);
-  reset(id);
+void FSM::Reset(const std::string& state) {
+  auto id = GetStateId(state);
+  if (!id) throw StateNotFoundException(state);
+  Reset(*id);
 }
 
-void FSM::reset(StateId state_id) {
+void FSM::Reset(StateId state_id) {
   withLock([&]() {
     State* state = getState(state_id);
     if (!state) {
@@ -157,7 +163,7 @@ void FSM::reset(StateId state_id) {
   });
 }
 
-void FSM::processEvent(EventType event) {
+void FSM::ProcessEvent(EventType event) {
   withLock([&]() {
     if (!is_started_) {
       throw FSMException("FSM is not started");
@@ -187,7 +193,7 @@ void FSM::processEvent(EventType event) {
       }
 
       // Check transition condition (guard)
-      if (transition.condition && !transition.condition->canTransition(
+      if (transition.condition && !transition.condition->CanTransition(
                                       *current_state, *target_state, event)) {
         continue;  // Guard prevented transition
       }
@@ -197,7 +203,7 @@ void FSM::processEvent(EventType event) {
 
       // Execute transition action
       if (transition.condition) {
-        transition.condition->executeAction(*current_state, *target_state,
+        transition.condition->ExecuteAction(*current_state, *target_state,
                                             event);
       }
 
@@ -221,48 +227,46 @@ void FSM::processEvent(EventType event) {
   });
 }
 
-bool FSM::isInState(const std::string& state_name) const {
+bool FSM::IsInState(const std::string& state_name) const {
   return withLock([&]() {
     auto it = name_to_id_.find(state_name);
     return it != name_to_id_.end() && it->second == current_state_id_;
   });
 }
 
-bool FSM::isInState(StateId state_id) const {
+bool FSM::IsInState(StateId state_id) const {
   return withLock([&]() { return current_state_id_ == state_id; });
 }
 
-std::optional<std::string> FSM::getCurrentStateName() const {
+std::optional<std::string> FSM::GetCurrentStateName() const {
   return withLock([&]() -> std::optional<std::string> {
     State* state = getState(current_state_id_);
     return state ? std::make_optional(state->name()) : std::nullopt;
   });
 }
 
-std::optional<StateId> FSM::getCurrentStateId() const {
+std::optional<StateId> FSM::GetCurrentStateId() const {
   return withLock([&]() -> std::optional<StateId> {
     return is_started_ ? std::make_optional(current_state_id_) : std::nullopt;
   });
 }
 
-StateId FSM::getStateId(const std::string& name) const {
-  return withLock([&]() -> StateId {
+std::optional<StateId> FSM::GetStateId(const std::string& name) const {
+  return withLock([&]() -> std::optional<StateId> {
     auto it = name_to_id_.find(name);
-    if (it == name_to_id_.end()) {
-      throw StateNotFoundException(name);
-    }
+    if (it == name_to_id_.end()) return std::nullopt;
     return it->second;
   });
 }
 
-std::optional<std::string> FSM::getStateName(StateId id) const {
+std::optional<std::string> FSM::GetStateName(StateId id) const {
   return withLock([&]() -> std::optional<std::string> {
     State* state = getState(id);
     return state ? std::make_optional(state->name()) : std::nullopt;
   });
 }
 
-std::string FSM::toDotGraph() const {
+std::string FSM::ToDotGraph() const {
   return withLock([&]() -> std::string {
     std::stringstream ss;
     ss << "digraph FSM {\n";
@@ -299,16 +303,16 @@ std::string FSM::toDotGraph() const {
   });
 }
 
-const std::vector<HistoryEntry>& FSM::getHistory() const {
+const std::vector<HistoryEntry>& FSM::GetHistory() const {
   return withLock(
       [&]() -> const std::vector<HistoryEntry>& { return history_; });
 }
 
-void FSM::clearHistory() {
+void FSM::ClearHistory() {
   withLock([&]() { history_.clear(); });
 }
 
-void FSM::setMaxHistorySize(std::size_t size) {
+void FSM::SetMaxHistorySize(std::size_t size) {
   withLock([&]() {
     max_history_size_ = size;
     while (history_.size() > max_history_size_) {

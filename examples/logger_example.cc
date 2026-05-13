@@ -37,7 +37,7 @@ void basic_logging_example() {
   LogE("This is an error message");
 
   // Logging with custom logger instance
-  auto* logger = logger::default_logger();
+  auto* logger = logger::DefaultLogger();
   INFO(logger, "Custom logger instance message");
 
   // Formatted logging
@@ -54,10 +54,10 @@ void performance_example() {
   std::cout << "\n=== Performance Example ===" << std::endl;
 
   const int NUM_MESSAGES = 10000;
-  auto* logger = logger::default_logger();
+  auto* logger = logger::DefaultLogger();
 
   // Set to INFO level to avoid debug message overhead
-  logger::set_level(logger, logger::info);
+  logger::SetLevel(logger, logger::info);
 
   // Measure performance of async logging
   auto start = std::chrono::high_resolution_clock::now();
@@ -79,16 +79,16 @@ void performance_example() {
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
   // Check for dropped messages
-  std::cout << "Dropped messages: " << logger->get_dropped_count() << std::endl;
+  std::cout << "Dropped messages: " << logger->GetDroppedCount() << std::endl;
 }
 
 void level_filtering_example() {
   std::cout << "\n=== Level Filtering Example ===" << std::endl;
 
-  auto* logger = logger::default_logger();
+  auto* logger = logger::DefaultLogger();
 
   // Set to WARN level - only WARN and ERROR messages will be shown
-  logger::set_level(logger, logger::warn);
+  logger::SetLevel(logger, logger::warn);
   std::cout << "Set log level to WARN" << std::endl;
 
   LogD("This debug message should NOT appear");
@@ -97,7 +97,7 @@ void level_filtering_example() {
   LogE("This error message SHOULD appear");
 
   // Reset to INFO level
-  logger::set_level(logger, logger::info);
+  logger::SetLevel(logger, logger::info);
   std::cout << "Reset log level to info" << std::endl;
   std::string max_line(10 * 1024, 'c');
   LogI("max line %s", max_line.c_str());
@@ -157,7 +157,7 @@ int main() {
   std::cout << "======================" << std::endl;
 
   // Initialize logger (happens automatically on first use)
-  auto* logger = logger::default_logger();
+  auto* logger = logger::DefaultLogger();
 
   // Run various examples
   basic_logging_example();
@@ -167,7 +167,7 @@ int main() {
   error_handling_example();
 
   // Flush all pending messages before exit
-  logger->flush();
+  logger->Flush();
 
   // Allow time for final flush
   std::this_thread::sleep_for(std::chrono::milliseconds(100));

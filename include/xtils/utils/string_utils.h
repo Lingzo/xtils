@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <charconv>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -82,7 +83,7 @@ inline std::optional<double> StringToDouble(const std::string& s) {
 }
 
 template <typename T>
-inline std::optional<T> StringViewToNumber(const xtils::StringView& sv,
+inline std::optional<T> StringViewToNumber(std::string_view sv,
                                            int xtils = 10) {
   // std::from_chars() does not regonize the leading '+' character and only
   // recognizes '-' so remove the '+' if it exists to avoid errors and match
@@ -98,7 +99,7 @@ inline std::optional<T> StringViewToNumber(const xtils::StringView& sv,
   }
 }
 
-inline std::optional<uint32_t> StringViewToUInt32(const xtils::StringView& sv,
+inline std::optional<uint32_t> StringViewToUInt32(std::string_view sv,
                                                   int xtils = 10) {
   // std::from_chars() does not recognize the leading '-' character for
   // unsigned conversions, but strtol does. To Mimic the behavior of strtol,
@@ -112,12 +113,12 @@ inline std::optional<uint32_t> StringViewToUInt32(const xtils::StringView& sv,
   }
 }
 
-inline std::optional<int32_t> StringViewToInt32(const xtils::StringView& sv,
+inline std::optional<int32_t> StringViewToInt32(std::string_view sv,
                                                 int xtils = 10) {
   return StringViewToNumber<int32_t>(sv, xtils);
 }
 
-inline std::optional<uint64_t> StringViewToUInt64(const xtils::StringView& sv,
+inline std::optional<uint64_t> StringViewToUInt64(std::string_view sv,
                                                   int xtils = 10) {
   // std::from_chars() does not recognize the leading '-' character for
   // unsigned conversions, but strtol does. To Mimic the behavior of strtol,
@@ -131,7 +132,7 @@ inline std::optional<uint64_t> StringViewToUInt64(const xtils::StringView& sv,
   }
 }
 
-inline std::optional<int64_t> StringViewToInt64(const xtils::StringView& sv,
+inline std::optional<int64_t> StringViewToInt64(std::string_view sv,
                                                 int xtils = 10) {
   return StringViewToNumber<int64_t>(sv, xtils);
 }
@@ -142,7 +143,7 @@ bool StartsWithAny(const std::string& str,
                    const std::vector<std::string>& prefixes);
 bool Contains(const std::string& haystack, const std::string& needle);
 bool Contains(const std::string& haystack, char needle);
-size_t Find(const StringView& needle, const StringView& haystack);
+size_t Find(std::string_view needle, std::string_view haystack);
 bool CaseInsensitiveEqual(const std::string& first, const std::string& second);
 std::string Join(const std::vector<std::string>& parts,
                  const std::string& delim);
@@ -171,7 +172,7 @@ std::string ReplaceAll(std::string& str, const std::string& to_replace,
 // If `str` contains non-ASCII characters, the function returns false,
 // removes invalid UTF-8 characters from `str`, and stores the result in
 // `output`.
-bool CheckAsciiAndRemoveInvalidUTF8(xtils::StringView str, std::string& output);
+bool CheckAsciiAndRemoveInvalidUTF8(std::string_view str, std::string& output);
 
 // A BSD-style strlcpy without the return value.
 // Copies at most |dst_size|-1 characters. Unlike strncpy, it always \0
@@ -206,7 +207,7 @@ size_t SprintfTrunc(char* dst, size_t dst_size, const char* fmt, ...);
 
 // Line number starts from 1
 struct LineWithOffset {
-  xtils::StringView line;
+  std::string_view line;
   uint32_t line_offset;
   uint32_t line_num;
 };
@@ -215,7 +216,7 @@ struct LineWithOffset {
 // which offset points, what number is this line (starts from 1), and the offset
 // inside this line. returns std::nullopt if the offset points to
 // line break character or exceeds string length.
-std::optional<LineWithOffset> FindLineWithOffset(xtils::StringView str,
+std::optional<LineWithOffset> FindLineWithOffset(std::string_view str,
                                                  uint32_t offset);
 
 // A helper class to facilitate construction and usage of write-once stack
@@ -242,7 +243,7 @@ class StackString {
     len_ = res < 0 ? 0 : std::min(static_cast<size_t>(res), sizeof(buf_) - 1);
   }
 
-  StringView string_view() const { return StringView(buf_, len_); }
+  std::string_view string_view() const { return std::string_view{buf_, len_}; }
   std::string ToStr() const { return std::string(buf_, len_); }
   const char* c_str() const { return buf_; }
   size_t len() const { return len_; }

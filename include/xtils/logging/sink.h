@@ -18,8 +18,10 @@
 
 #include <cassert>
 #include <cstddef>
+#include <memory>
 #include <string>
 
+namespace xtils {
 namespace logger {
 struct Sink {
   virtual ~Sink() {}
@@ -42,6 +44,7 @@ class FileSink : public Sink {
 
  private:
   class Impl;
-  Impl* impl;
+  std::unique_ptr<Impl> impl;
 };
 }  // namespace logger
+}  // namespace xtils

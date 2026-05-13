@@ -15,18 +15,18 @@ __attribute__((weak)) void app_main(xtils::App& ctx,
                                     const std::vector<std::string>& argv) {}
 
 namespace xtils {
-void init(const std::vector<std::string>& args) { App::ins()->init(args); }
+void Init(const std::vector<std::string>& args) { App::Ins()->Init(args); }
 
-void init(int argc, const char* const argv[]) { init({argv, argv + argc}); }
+void Init(int argc, const char* const argv[]) { Init({argv, argv + argc}); }
 
-void run_forever() { App::ins()->run(); }
-void run_daemon() { App::ins()->run_daemon(); }
+void RunForever() { App::Ins()->Run(); }
+void RunDaemon() { App::Ins()->RunDaemon(); }
 
-bool isOk() { return !system::SignalHandler::IsShutdownRequested(); }
+bool IsOk() { return !system::SignalHandler::IsShutdownRequested(); }
 
-void shutdown() {
-  if (isOk()) system::SignalHandler::Shutdown();
-  while (App::ins()->is_running()) {
+void Shutdown() {
+  if (IsOk()) system::SignalHandler::Shutdown();
+  while (App::Ins()->IsRunning()) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 }

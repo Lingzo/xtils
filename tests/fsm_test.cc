@@ -23,27 +23,27 @@ TEST_CASE("FSM Basic State Management") {
   FSM fsm;
 
   SUBCASE("Add states") {
-    auto state1_id = fsm.addState("State1");
-    auto state2_id = fsm.addState("State2");
+    auto state1_id = fsm.AddState("State1");
+    auto state2_id = fsm.AddState("State2");
 
     CHECK(state1_id != state2_id);
-    CHECK(fsm.getStateId("State1") == state1_id);
-    CHECK(fsm.getStateId("State2") == state2_id);
-    CHECK(fsm.getStateName(state1_id) == "State1");
-    CHECK(fsm.getStateName(state2_id) == "State2");
+    CHECK(fsm.GetStateId("State1").value() == state1_id);
+    CHECK(fsm.GetStateId("State2").value() == state2_id);
+    CHECK(fsm.GetStateName(state1_id) == "State1");
+    CHECK(fsm.GetStateName(state2_id) == "State2");
   }
 
   SUBCASE("Duplicate state names should throw") {
-    fsm.addState("DuplicateState");
-    CHECK_THROWS_AS(fsm.addState("DuplicateState"), FSMException);
+    fsm.AddState("DuplicateState");
+    CHECK_THROWS_AS(fsm.AddState("DuplicateState"), FSMException);
   }
 
   SUBCASE("Get non-existent state should throw") {
-    CHECK_THROWS_AS(fsm.getStateId("NonExistent"), StateNotFoundException);
+    CHECK(!fsm.GetStateId("NonExistent").has_value());
   }
 
   SUBCASE("Get state name for invalid ID") {
-    CHECK_FALSE(fsm.getStateName(999999).has_value());
+    CHECK_FALSE(fsm.GetStateName(999999).has_value());
   }
 }
 
@@ -55,7 +55,7 @@ TEST_CASE("FSM State Callbacks") {
   EventType received_event = 0;
 
   SUBCASE("State with callbacks") {
-    auto state_id = fsm.addState(
+    auto state_id = fsm.AddState(
         "CallbackState",
         [&](const State& state, EventType event) {
           on_enter_called = true;
@@ -63,16 +63,16 @@ TEST_CASE("FSM State Callbacks") {
         },
         [&](const State& state, EventType event) { on_exit_called = true; });
 
-    auto state2_id = fsm.addState("State2");
+    auto state2_id = fsm.AddState("State2");
 
-    fsm.addTransition("CallbackState", "State2", EVENT_A);
+    fsm.AddTransition("CallbackState", "State2", EVENT_A);
 
-    fsm.start("CallbackState");
+    fsm.Start("CallbackState");
     CHECK(on_enter_called);
     CHECK(received_event == 0);  // Start event
 
     on_enter_called = false;
-    fsm.processEvent(EVENT_A);
+    fsm.ProcessEvent(EVENT_A);
     CHECK(on_exit_called);
   }
 }
@@ -80,108 +80,108 @@ TEST_CASE("FSM State Callbacks") {
 TEST_CASE("FSM Transitions") {
   FSM fsm;
 
-  fsm.addState("State1");
-  fsm.addState("State2");
-  fsm.addState("State3");
+  fsm.AddState("State1");
+  fsm.AddState("State2");
+  fsm.AddState("State3");
 
   SUBCASE("Basic transition") {
-    fsm.addTransition("State1", "State2", EVENT_A);
-    fsm.start("State1");
+    fsm.AddTransition("State1", "State2", EVENT_A);
+    fsm.Start("State1");
 
-    CHECK(fsm.isInState("State1"));
-    CHECK_FALSE(fsm.isInState("State2"));
+    CHECK(fsm.IsInState("State1"));
+    CHECK_FALSE(fsm.IsInState("State2"));
 
-    fsm.processEvent(EVENT_A);
+    fsm.ProcessEvent(EVENT_A);
 
-    CHECK_FALSE(fsm.isInState("State1"));
-    CHECK(fsm.isInState("State2"));
-    CHECK(fsm.getCurrentStateName() == "State2");
+    CHECK_FALSE(fsm.IsInState("State1"));
+    CHECK(fsm.IsInState("State2"));
+    CHECK(fsm.GetCurrentStateName() == "State2");
   }
 
   SUBCASE("Multiple transitions from same state") {
-    fsm.addTransition("State1", "State2", EVENT_A);
-    fsm.addTransition("State1", "State3", EVENT_B);
-    fsm.start("State1");
+    fsm.AddTransition("State1", "State2", EVENT_A);
+    fsm.AddTransition("State1", "State3", EVENT_B);
+    fsm.Start("State1");
 
-    fsm.processEvent(EVENT_B);
-    CHECK(fsm.isInState("State3"));
+    fsm.ProcessEvent(EVENT_B);
+    CHECK(fsm.IsInState("State3"));
 
-    fsm.reset("State1");
-    fsm.processEvent(EVENT_A);
-    CHECK(fsm.isInState("State2"));
+    fsm.Reset("State1");
+    fsm.ProcessEvent(EVENT_A);
+    CHECK(fsm.IsInState("State2"));
   }
 
   SUBCASE("No valid transition") {
-    fsm.addTransition("State1", "State2", EVENT_A);
-    fsm.start("State1");
+    fsm.AddTransition("State1", "State2", EVENT_A);
+    fsm.Start("State1");
 
-    fsm.processEvent(EVENT_B);       // No transition for this event
-    CHECK(fsm.isInState("State1"));  // Should stay in same state
+    fsm.ProcessEvent(EVENT_B);       // No transition for this event
+    CHECK(fsm.IsInState("State1"));  // Should stay in same state
   }
 
   SUBCASE("Transition with multiple events") {
     std::vector<EventType> events = {EVENT_A, EVENT_B, EVENT_C};
-    fsm.addTransition("State1", "State2", events);
-    fsm.start("State1");
+    fsm.AddTransition("State1", "State2", events);
+    fsm.Start("State1");
 
-    fsm.processEvent(EVENT_B);
-    CHECK(fsm.isInState("State2"));
+    fsm.ProcessEvent(EVENT_B);
+    CHECK(fsm.IsInState("State2"));
 
-    fsm.reset("State1");
-    fsm.processEvent(EVENT_C);
-    CHECK(fsm.isInState("State2"));
+    fsm.Reset("State1");
+    fsm.ProcessEvent(EVENT_C);
+    CHECK(fsm.IsInState("State2"));
   }
 }
 
 TEST_CASE("FSM Transition Conditions") {
   FSM fsm;
 
-  fsm.addState("State1");
-  fsm.addState("State2");
+  fsm.AddState("State1");
+  fsm.AddState("State2");
 
   SUBCASE("Guard conditions") {
     bool allow_transition = true;
 
-    auto guard = makeGuard(
+    auto guard = MakeGuard(
         "test_guard", [&](const State& from, const State& to, EventType event) {
           return allow_transition;
         });
 
-    fsm.addTransition("State1", "State2", EVENT_A, guard);
-    fsm.start("State1");
+    fsm.AddTransition("State1", "State2", EVENT_A, guard);
+    fsm.Start("State1");
 
     // Guard allows transition
     allow_transition = true;
-    fsm.processEvent(EVENT_A);
-    CHECK(fsm.isInState("State2"));
+    fsm.ProcessEvent(EVENT_A);
+    CHECK(fsm.IsInState("State2"));
 
     // Reset and test blocked transition
-    fsm.reset("State1");
+    fsm.Reset("State1");
     allow_transition = false;
-    fsm.processEvent(EVENT_A);
-    CHECK(fsm.isInState("State1"));  // Should stay in State1
+    fsm.ProcessEvent(EVENT_A);
+    CHECK(fsm.IsInState("State1"));  // Should stay in State1
   }
 
   SUBCASE("Action conditions") {
     bool action_executed = false;
 
-    auto action = makeAction("test_action",
+    auto action = MakeAction("test_action",
                              [&](const State& from, const State& to,
                                  EventType event) { action_executed = true; });
 
-    fsm.addTransition("State1", "State2", EVENT_A, action);
-    fsm.start("State1");
+    fsm.AddTransition("State1", "State2", EVENT_A, action);
+    fsm.Start("State1");
 
-    fsm.processEvent(EVENT_A);
+    fsm.ProcessEvent(EVENT_A);
     CHECK(action_executed);
-    CHECK(fsm.isInState("State2"));
+    CHECK(fsm.IsInState("State2"));
   }
 
   SUBCASE("Combined guard and action") {
     bool guard_checked = false;
     bool action_executed = false;
 
-    auto condition = makeCondition(
+    auto condition = MakeCondition(
         "combined_condition",
         [&](const State& from, const State& to, EventType event) {
           guard_checked = true;
@@ -191,101 +191,101 @@ TEST_CASE("FSM Transition Conditions") {
           action_executed = true;
         });
 
-    fsm.addTransition("State1", "State2", EVENT_A, condition);
-    fsm.start("State1");
+    fsm.AddTransition("State1", "State2", EVENT_A, condition);
+    fsm.Start("State1");
 
-    fsm.processEvent(EVENT_A);
+    fsm.ProcessEvent(EVENT_A);
     CHECK(guard_checked);
     CHECK(action_executed);
-    CHECK(fsm.isInState("State2"));
+    CHECK(fsm.IsInState("State2"));
   }
 }
 
 TEST_CASE("FSM Control Operations") {
   FSM fsm;
 
-  fsm.addState("Initial");
-  fsm.addState("Running");
-  fsm.addState("Stopped");
+  fsm.AddState("Initial");
+  fsm.AddState("Running");
+  fsm.AddState("Stopped");
 
   SUBCASE("Start FSM") {
-    CHECK_FALSE(fsm.getCurrentStateId().has_value());
+    CHECK_FALSE(fsm.GetCurrentStateId().has_value());
 
-    fsm.start("Initial");
-    CHECK(fsm.getCurrentStateId().has_value());
-    CHECK(fsm.isInState("Initial"));
+    fsm.Start("Initial");
+    CHECK(fsm.GetCurrentStateId().has_value());
+    CHECK(fsm.IsInState("Initial"));
   }
 
   SUBCASE("Start with invalid state") {
-    CHECK_THROWS_AS(fsm.start("NonExistent"), StateNotFoundException);
+    CHECK_THROWS_AS(fsm.Start("NonExistent"), StateNotFoundException);
   }
 
   SUBCASE("Reset FSM") {
-    fsm.addTransition("Initial", "Running", EVENT_A);
-    fsm.start("Initial");
-    fsm.processEvent(EVENT_A);
-    CHECK(fsm.isInState("Running"));
+    fsm.AddTransition("Initial", "Running", EVENT_A);
+    fsm.Start("Initial");
+    fsm.ProcessEvent(EVENT_A);
+    CHECK(fsm.IsInState("Running"));
 
-    fsm.reset("Stopped");
-    CHECK(fsm.isInState("Stopped"));
+    fsm.Reset("Stopped");
+    CHECK(fsm.IsInState("Stopped"));
   }
 
   SUBCASE("Process event without starting") {
-    CHECK_THROWS_AS(fsm.processEvent(EVENT_A), FSMException);
+    CHECK_THROWS_AS(fsm.ProcessEvent(EVENT_A), FSMException);
   }
 }
 
 TEST_CASE("FSM History Management") {
   FSM fsm;
 
-  fsm.addState("State1");
-  fsm.addState("State2");
-  fsm.addTransition("State1", "State2", EVENT_A);
+  fsm.AddState("State1");
+  fsm.AddState("State2");
+  fsm.AddTransition("State1", "State2", EVENT_A);
 
   SUBCASE("History tracking") {
-    fsm.start("State1");
-    CHECK(fsm.getHistory().size() == 1);  // Start event
+    fsm.Start("State1");
+    CHECK(fsm.GetHistory().size() == 1);  // Start event
 
-    fsm.processEvent(EVENT_A);
-    CHECK(fsm.getHistory().size() == 2);  // Transition event
+    fsm.ProcessEvent(EVENT_A);
+    CHECK(fsm.GetHistory().size() == 2);  // Transition event
 
-    const auto& history = fsm.getHistory();
+    const auto& history = fsm.GetHistory();
     CHECK(history[0].transition_occurred == true);  // Start
     CHECK(history[1].transition_occurred == true);  // Transition
   }
 
   SUBCASE("History size limit") {
-    fsm.setMaxHistorySize(2);
+    fsm.SetMaxHistorySize(2);
 
-    fsm.start("State1");
-    fsm.processEvent(EVENT_A);        // Should have 2 entries
-    fsm.processEvent(EVENT_INVALID);  // Should trigger history cleanup
+    fsm.Start("State1");
+    fsm.ProcessEvent(EVENT_A);        // Should have 2 entries
+    fsm.ProcessEvent(EVENT_INVALID);  // Should trigger history cleanup
 
-    CHECK(fsm.getHistory().size() <= 2);
+    CHECK(fsm.GetHistory().size() <= 2);
   }
 
   SUBCASE("Clear history") {
-    fsm.start("State1");
-    fsm.processEvent(EVENT_A);
-    CHECK(fsm.getHistory().size() > 0);
+    fsm.Start("State1");
+    fsm.ProcessEvent(EVENT_A);
+    CHECK(fsm.GetHistory().size() > 0);
 
-    fsm.clearHistory();
-    CHECK(fsm.getHistory().size() == 0);
+    fsm.ClearHistory();
+    CHECK(fsm.GetHistory().size() == 0);
   }
 }
 
 TEST_CASE("FSM DOT Graph Generation") {
   FSM fsm;
 
-  fsm.addState("Start");
-  fsm.addState("Process");
-  fsm.addState("End");
+  fsm.AddState("Start");
+  fsm.AddState("Process");
+  fsm.AddState("End");
 
-  fsm.addTransition("Start", "Process", EVENT_A);
-  fsm.addTransition("Process", "End", EVENT_B);
+  fsm.AddTransition("Start", "Process", EVENT_A);
+  fsm.AddTransition("Process", "End", EVENT_B);
 
   SUBCASE("Generate DOT graph") {
-    std::string dot = fsm.toDotGraph();
+    std::string dot = fsm.ToDotGraph();
 
     CHECK(dot.find("digraph FSM") != std::string::npos);
     CHECK(dot.find("Start") != std::string::npos);
@@ -295,8 +295,8 @@ TEST_CASE("FSM DOT Graph Generation") {
   }
 
   SUBCASE("Current state highlighting") {
-    fsm.start("Process");
-    std::string dot = fsm.toDotGraph();
+    fsm.Start("Process");
+    std::string dot = fsm.ToDotGraph();
 
     // Current state should be highlighted
     CHECK(dot.find("Process") != std::string::npos);
@@ -306,24 +306,24 @@ TEST_CASE("FSM DOT Graph Generation") {
 
 TEST_CASE("FSM Thread Safety") {
   FSM fsm;
-  fsm.enableThreadSafety(true);
+  fsm.EnableThreadSafety(true);
 
-  fsm.addState("ThreadSafe1");
-  fsm.addState("ThreadSafe2");
-  fsm.addTransition("ThreadSafe1", "ThreadSafe2", EVENT_A);
+  fsm.AddState("ThreadSafe1");
+  fsm.AddState("ThreadSafe2");
+  fsm.AddTransition("ThreadSafe1", "ThreadSafe2", EVENT_A);
 
   SUBCASE("Thread-safe operations") {
-    fsm.start("ThreadSafe1");
-    CHECK(fsm.isInState("ThreadSafe1"));
+    fsm.Start("ThreadSafe1");
+    CHECK(fsm.IsInState("ThreadSafe1"));
 
-    fsm.processEvent(EVENT_A);
-    CHECK(fsm.isInState("ThreadSafe2"));
+    fsm.ProcessEvent(EVENT_A);
+    CHECK(fsm.IsInState("ThreadSafe2"));
 
     // These operations should work without throwing in thread-safe mode
-    auto current_state = fsm.getCurrentStateName();
+    auto current_state = fsm.GetCurrentStateName();
     CHECK(current_state.has_value());
 
-    const auto& history = fsm.getHistory();
+    const auto& history = fsm.GetHistory();
     CHECK(history.size() > 0);
   }
 }
@@ -332,18 +332,17 @@ TEST_CASE("FSM Error Handling") {
   FSM fsm;
 
   SUBCASE("Invalid state operations") {
-    CHECK_THROWS_AS(fsm.getStateId("Invalid"), StateNotFoundException);
-    CHECK_THROWS_AS(fsm.start("Invalid"), StateNotFoundException);
-    CHECK_THROWS_AS(fsm.reset("Invalid"), StateNotFoundException);
+    CHECK_THROWS_AS(fsm.Start("Invalid"), StateNotFoundException);
+    CHECK_THROWS_AS(fsm.Reset("Invalid"), StateNotFoundException);
   }
 
   SUBCASE("Invalid transition operations") {
-    fsm.addState("Valid");
+    fsm.AddState("Valid");
 
     // Try to add transition with invalid states
-    CHECK_THROWS_AS(fsm.addTransition("Invalid", "Valid", EVENT_A),
+    CHECK_THROWS_AS(fsm.AddTransition("Invalid", "Valid", EVENT_A),
                     StateNotFoundException);
-    CHECK_THROWS_AS(fsm.addTransition("Valid", "Invalid", EVENT_A),
+    CHECK_THROWS_AS(fsm.AddTransition("Valid", "Invalid", EVENT_A),
                     StateNotFoundException);
   }
 }
@@ -352,42 +351,42 @@ TEST_CASE("Traffic Light Example") {
   FSM fsm;
 
   // Create a traffic light system
-  fsm.addState("Red");
-  fsm.addState("Yellow");
-  fsm.addState("Green");
-  fsm.addState("Emergency");
+  fsm.AddState("Red");
+  fsm.AddState("Yellow");
+  fsm.AddState("Green");
+  fsm.AddState("Emergency");
 
   SUBCASE("Traffic light cycle") {
-    fsm.addTransition("Red", "Green", EVENT_TIMER);
-    fsm.addTransition("Green", "Yellow", EVENT_TIMER);
-    fsm.addTransition("Yellow", "Red", EVENT_TIMER);
+    fsm.AddTransition("Red", "Green", EVENT_TIMER);
+    fsm.AddTransition("Green", "Yellow", EVENT_TIMER);
+    fsm.AddTransition("Yellow", "Red", EVENT_TIMER);
 
     // Emergency transitions from any state
     std::vector<std::string> normal_states = {"Red", "Yellow", "Green"};
     for (const auto& state : normal_states) {
-      fsm.addTransition(state, "Emergency", EVENT_C);
+      fsm.AddTransition(state, "Emergency", EVENT_C);
     }
-    fsm.addTransition("Emergency", "Red", EVENT_A);
+    fsm.AddTransition("Emergency", "Red", EVENT_A);
 
-    fsm.start("Red");
+    fsm.Start("Red");
 
     // Normal cycle
-    fsm.processEvent(EVENT_TIMER);  // Red -> Green
-    CHECK(fsm.isInState("Green"));
+    fsm.ProcessEvent(EVENT_TIMER);  // Red -> Green
+    CHECK(fsm.IsInState("Green"));
 
-    fsm.processEvent(EVENT_TIMER);  // Green -> Yellow
-    CHECK(fsm.isInState("Yellow"));
+    fsm.ProcessEvent(EVENT_TIMER);  // Green -> Yellow
+    CHECK(fsm.IsInState("Yellow"));
 
-    fsm.processEvent(EVENT_TIMER);  // Yellow -> Red
-    CHECK(fsm.isInState("Red"));
+    fsm.ProcessEvent(EVENT_TIMER);  // Yellow -> Red
+    CHECK(fsm.IsInState("Red"));
 
     // Emergency override
-    fsm.processEvent(EVENT_C);
-    CHECK(fsm.isInState("Emergency"));
+    fsm.ProcessEvent(EVENT_C);
+    CHECK(fsm.IsInState("Emergency"));
 
     // Return to normal
-    fsm.processEvent(EVENT_A);
-    CHECK(fsm.isInState("Red"));
+    fsm.ProcessEvent(EVENT_A);
+    CHECK(fsm.IsInState("Red"));
   }
 }
 
@@ -401,14 +400,14 @@ TEST_CASE("Door State Machine Example") {
     UNLOCK_CMD = 13
   };
 
-  fsm.addState("Closed");
-  fsm.addState("Open");
-  fsm.addState("Locked");
+  fsm.AddState("Closed");
+  fsm.AddState("Open");
+  fsm.AddState("Locked");
 
   SUBCASE("Door operations") {
     // Add transitions with guards
     auto door_guard =
-        makeGuard("door_security_check",
+        MakeGuard("door_security_check",
                   [](const State& from, const State& to, EventType event) {
                     if (event == OPEN_CMD && from.name() == "Locked") {
                       return false;  // Cannot open locked door
@@ -417,30 +416,30 @@ TEST_CASE("Door State Machine Example") {
                   });
 
     // Normal transitions
-    fsm.addTransition("Closed", "Open", OPEN_CMD);
-    fsm.addTransition("Open", "Closed", CLOSE_CMD);
-    fsm.addTransition("Closed", "Locked", LOCK_CMD);
-    fsm.addTransition("Locked", "Closed", UNLOCK_CMD);
+    fsm.AddTransition("Closed", "Open", OPEN_CMD);
+    fsm.AddTransition("Open", "Closed", CLOSE_CMD);
+    fsm.AddTransition("Closed", "Locked", LOCK_CMD);
+    fsm.AddTransition("Locked", "Closed", UNLOCK_CMD);
 
     // Guarded transition
-    fsm.addTransition("Locked", "Open", OPEN_CMD, door_guard);
+    fsm.AddTransition("Locked", "Open", OPEN_CMD, door_guard);
 
-    fsm.start("Closed");
+    fsm.Start("Closed");
 
-    fsm.processEvent(OPEN_CMD);  // Closed -> Open
-    CHECK(fsm.isInState("Open"));
+    fsm.ProcessEvent(OPEN_CMD);  // Closed -> Open
+    CHECK(fsm.IsInState("Open"));
 
-    fsm.processEvent(CLOSE_CMD);  // Open -> Closed
-    CHECK(fsm.isInState("Closed"));
+    fsm.ProcessEvent(CLOSE_CMD);  // Open -> Closed
+    CHECK(fsm.IsInState("Closed"));
 
-    fsm.processEvent(LOCK_CMD);  // Closed -> Locked
-    CHECK(fsm.isInState("Locked"));
+    fsm.ProcessEvent(LOCK_CMD);  // Closed -> Locked
+    CHECK(fsm.IsInState("Locked"));
 
-    fsm.processEvent(OPEN_CMD);  // LOCKED -> LOCKED (blocked by guard)
-    CHECK(fsm.isInState("Locked"));
+    fsm.ProcessEvent(OPEN_CMD);  // LOCKED -> LOCKED (blocked by guard)
+    CHECK(fsm.IsInState("Locked"));
 
-    fsm.processEvent(UNLOCK_CMD);  // Locked -> Closed
-    CHECK(fsm.isInState("Closed"));
+    fsm.ProcessEvent(UNLOCK_CMD);  // Locked -> Closed
+    CHECK(fsm.IsInState("Closed"));
   }
 }
 

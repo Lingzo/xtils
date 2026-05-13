@@ -17,7 +17,7 @@ class runtime_error : public std::runtime_error {
 };
 }  // namespace xtils
 
-namespace utils {
+namespace xtils {
 inline bool Try(std::function<void()> cb, bool log = false) {
   try {
     cb();
@@ -33,4 +33,4 @@ inline bool Try(std::function<void()> cb, bool log = false) {
   }
   return false;
 }
-}  // namespace utils
+}  // namespace xtils

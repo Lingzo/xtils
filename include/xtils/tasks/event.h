@@ -53,21 +53,21 @@ class EventManager {
   // Use enable_if as a non-type template parameter (int = 0) so the
   // function templates have distinct signatures and do not collide.
   template <typename T, std::enable_if_t<!std::is_enum_v<T>, int> = 0>
-  void connect(TypedCallback<T> cb) {
+  void Connect(TypedCallback<T> cb) {
     std::type_index type = std::type_index(typeid(T));
     maps_[type].emplace_back(
         [cb](const void* e) { cb(*static_cast<const T*>(e)); });
   }
 
   template <typename T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
-  void connect(T id, TypedCallback<T> cb) {
+  void Connect(T id, TypedCallback<T> cb) {
     std::uint32_t uid = static_cast<std::uint32_t>(id);
     enum_maps_[uid].emplace_back(
         [cb](const void* e) { cb(*static_cast<const T*>(e)); });
   }
 
   template <typename T, std::enable_if_t<!std::is_enum_v<T>, int> = 0>
-  void emit(const T& e) {
+  void Emit(const T& e) {
     if (stop_) return;
     std::type_index type = std::type_index(typeid(T));
     std::lock_guard<std::mutex> lock(map_mutex_);
@@ -78,7 +78,7 @@ class EventManager {
   }
 
   template <typename T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
-  void emit(const T& e) {
+  void Emit(const T& e) {
     if (stop_) return;
     std::uint32_t uid = static_cast<std::uint32_t>(e);
     std::lock_guard<std::mutex> lock(enum_map_mutex_);
@@ -88,10 +88,26 @@ class EventManager {
     }
   }
 
-  void stop() {
+  void Stop() {
     stop_ = true;
-    tg_->stop();
+    tg_->Stop();
   }
+
+  // Deprecated wrappers
+  template <typename T, std::enable_if_t<!std::is_enum_v<T>, int> = 0>
+  [[deprecated("Use Connect() instead")]]
+  void connect(TypedCallback<T> cb) { Connect<T>(std::move(cb)); }
+  template <typename T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+  [[deprecated("Use Connect() instead")]]
+  void connect(T id, TypedCallback<T> cb) { Connect<T>(id, std::move(cb)); }
+  template <typename T, std::enable_if_t<!std::is_enum_v<T>, int> = 0>
+  [[deprecated("Use Emit() instead")]]
+  void emit(const T& e) { Emit<T>(e); }
+  template <typename T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+  [[deprecated("Use Emit() instead")]]
+  void emit(const T& e) { Emit<T>(e); }
+  [[deprecated("Use Stop() instead")]]
+  void stop() { Stop(); }
 
  private:
   using Callbacks = std::list<OnEvent>;

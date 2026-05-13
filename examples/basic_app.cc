@@ -15,9 +15,9 @@
 class SimpleService : public xtils::Service<SimpleService> {
  public:
   SimpleService() : xtils::Service<SimpleService>("simple") {
-    config.define("params", "params", 0);
-    config.define("p.level.1", "p.level.1", false);
-    config.define("p.level.3", "p.level.3", "string");
+    config.Define("params", "params", 0);
+    config.Define("p.level.1", "p.level.1", false);
+    config.Define("p.level.3", "p.level.3", "string");
   }
   int fib(int n) {
     TRACE_SCOPE("Fib");
@@ -25,11 +25,11 @@ class SimpleService : public xtils::Service<SimpleService> {
     std::this_thread::sleep_for(std::chrono::milliseconds(n * 10));
     return fib(n - 1) + fib(n - 2);
   }
-  void init() override {
+  void Init() override {
     LogI("Compenets Init %s", xtils::type_name<SimpleService>());
-    LogI("params is %d", config.get<int>("params"));
+    LogI("params is %d", config.Get<int>("params").value());
     for (int i = 0; i < 10; i++)
-      ctx->spawn_async(
+      ctx->SpawnAsync(
           []() {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             LogI("Run in back");
@@ -37,19 +37,19 @@ class SimpleService : public xtils::Service<SimpleService> {
           []() { LogI("Run in main"); });
     enum EventIds : xtils::EventId { EVENT_TEST = 1, EVENT_TEST_2 = 2 };
     auto weak = GetWeakPtr();
-    ctx->connect(EVENT_TEST, [weak](const xtils::EventId& e) {
+    ctx->Connect(EVENT_TEST, [weak](const xtils::EventId& e) {
       LogI("On Event %d", e);
       std::this_thread::sleep_for(std::chrono::seconds(5));
       if (weak) {
-        weak->emit(EVENT_TEST_2);
+        weak->Emit(EVENT_TEST_2);
       }
     });
 
-    ctx->connect(EVENT_TEST_2, [this](const xtils::EventId& e) {
+    ctx->Connect(EVENT_TEST_2, [this](const xtils::EventId& e) {
       LogI("On Event 2 %d", e);
-      ctx->emit(EVENT_TEST);
+      ctx->Emit(EVENT_TEST);
     });
-    ctx->spawn_async([this] {
+    ctx->SpawnAsync([this] {
       TRACE_SCOPE("Task");
       fib(10);
       LogThis();
@@ -57,10 +57,10 @@ class SimpleService : public xtils::Service<SimpleService> {
 
     using namespace xtils;
     for (int i = 0; i <= 10; i++) {
-      ctx->emit(EVENT_TEST);
+      ctx->Emit(EVENT_TEST);
       auto t1 = steady::GetCurrentMs();
       int ms = 1000 * i;
-      ctx->delay(ms, [t1, ms] {
+      ctx->Delay(ms, [t1, ms] {
         LogW("Delay %dms: %d", ms, steady::GetCurrentMs() - t1);
         std::this_thread::sleep_for(std::chrono::milliseconds(ms));
       });
@@ -73,11 +73,11 @@ class SimpleService : public xtils::Service<SimpleService> {
                   });
   }
 
-  void deinit() override { LogI("Deinit"); }
+  void Deinit() override { LogI("Deinit"); }
 };
 
 // call by xtils
 void app_main(xtils::App& ctx, const std::vector<std::string>& args) {
   // setup service
-  ctx.registor(std::make_shared<SimpleService>());
+  ctx.Register(std::make_shared<SimpleService>());
 }

@@ -41,7 +41,7 @@ bool Contains(const std::string& haystack, const char needle) {
   return haystack.find(needle) != std::string::npos;
 }
 
-size_t Find(const StringView& needle, const StringView& haystack) {
+size_t Find(std::string_view needle, std::string_view haystack) {
   if (needle.empty()) return 0;
   if (needle.size() > haystack.size()) return std::string::npos;
   for (size_t i = 0; i < haystack.size() - (needle.size() - 1); ++i) {
@@ -179,7 +179,7 @@ std::string ReplaceAll(std::string& str, const std::string& to_replace,
   return str;
 }
 
-bool CheckAsciiAndRemoveInvalidUTF8(xtils::StringView str, std::string& output) {
+bool CheckAsciiAndRemoveInvalidUTF8(std::string_view str, std::string& output) {
   bool is_ascii = std::all_of(str.begin(), str.end(), [](char c) {
     return (static_cast<unsigned char>(c) & 0b10000000) == 0b00000000;
   });
@@ -283,7 +283,7 @@ size_t SprintfTrunc(char* dst, size_t dst_size, const char* fmt, ...) {
   return res;
 }
 
-std::optional<LineWithOffset> FindLineWithOffset(xtils::StringView str,
+std::optional<LineWithOffset> FindLineWithOffset(std::string_view str,
                                                  uint32_t offset) {
   static constexpr char kNewLine = '\n';
   uint32_t line_offset = 0;
@@ -299,7 +299,7 @@ std::optional<LineWithOffset> FindLineWithOffset(xtils::StringView str,
       if (end_offset == std::string::npos) {
         end_offset = str.size();
       }
-      xtils::StringView line = str.substr(line_offset, end_offset - line_offset);
+      std::string_view line = str.substr(line_offset, end_offset - line_offset);
       return LineWithOffset{line, offset - line_offset, line_count};
     }
   }

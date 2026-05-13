@@ -33,10 +33,10 @@ class TrafficLightExample {
     std::cout << "=== Traffic Light FSM Example ===" << std::endl;
 
     FSM fsm;
-    fsm.enableThreadSafety(true);
+    fsm.EnableThreadSafety(true);
 
     // Add states with callbacks
-    auto red_id = fsm.addState(
+    auto red_id = fsm.AddState(
         "RED",
         [](const State& state, EventType event) {
           std::cout << "Entered RED state - STOP!" << std::endl;
@@ -45,7 +45,7 @@ class TrafficLightExample {
           std::cout << "Exiting RED state" << std::endl;
         });
 
-    auto yellow_id = fsm.addState(
+    auto yellow_id = fsm.AddState(
         "YELLOW",
         [](const State& state, EventType event) {
           std::cout << "Entered YELLOW state - CAUTION!" << std::endl;
@@ -54,7 +54,7 @@ class TrafficLightExample {
           std::cout << "Exiting YELLOW state" << std::endl;
         });
 
-    auto green_id = fsm.addState(
+    auto green_id = fsm.AddState(
         "GREEN",
         [](const State& state, EventType event) {
           std::cout << "Entered GREEN state - GO!" << std::endl;
@@ -63,7 +63,7 @@ class TrafficLightExample {
           std::cout << "Exiting GREEN state" << std::endl;
         });
 
-    auto emergency_id = fsm.addState(
+    auto emergency_id = fsm.AddState(
         "EMERGENCY",
         [](const State& state, EventType event) {
           std::cout << "Entered EMERGENCY state - FLASHING RED!" << std::endl;
@@ -73,14 +73,14 @@ class TrafficLightExample {
         });
 
     // Create transition conditions
-    auto timer_condition = makeAction(
+    auto timer_condition = MakeAction(
         "timer_action",
         [](const State& from, const State& to, EventType event) {
           std::cout << "Timer expired, transitioning from " << from.name()
                     << " to " << to.name() << std::endl;
         });
 
-    auto pedestrian_guard = makeGuard(
+    auto pedestrian_guard = MakeGuard(
         "pedestrian_guard",
         [](const State& from, const State& to, EventType event) {
           // Only allow pedestrian crossing when coming from GREEN
@@ -93,70 +93,70 @@ class TrafficLightExample {
         });
 
     auto emergency_action =
-        makeAction("emergency_action",
+        MakeAction("emergency_action",
                    [](const State& from, const State& to, EventType event) {
                      std::cout << "EMERGENCY OVERRIDE ACTIVATED!" << std::endl;
                    });
 
     // Add transitions - normal cycle
-    fsm.addTransition("RED", "GREEN", TIMER_EXPIRED, timer_condition);
-    fsm.addTransition("GREEN", "YELLOW", TIMER_EXPIRED, timer_condition);
-    fsm.addTransition("YELLOW", "RED", TIMER_EXPIRED, timer_condition);
+    fsm.AddTransition("RED", "GREEN", TIMER_EXPIRED, timer_condition);
+    fsm.AddTransition("GREEN", "YELLOW", TIMER_EXPIRED, timer_condition);
+    fsm.AddTransition("YELLOW", "RED", TIMER_EXPIRED, timer_condition);
 
     // Add pedestrian crossing
-    fsm.addTransition("GREEN", "YELLOW", PEDESTRIAN_BUTTON, pedestrian_guard);
+    fsm.AddTransition("GREEN", "YELLOW", PEDESTRIAN_BUTTON, pedestrian_guard);
 
     // Add emergency transitions from any state
     std::vector<std::string> all_states = {"RED", "GREEN", "YELLOW"};
     for (const auto& state : all_states) {
-      fsm.addTransition(state, "EMERGENCY", EMERGENCY_OVERRIDE,
+      fsm.AddTransition(state, "EMERGENCY", EMERGENCY_OVERRIDE,
                         emergency_action);
     }
-    fsm.addTransition(
+    fsm.AddTransition(
         "EMERGENCY", "RED", NORMAL_OPERATION,
-        makeAction("restore_normal",
+        MakeAction("restore_normal",
                    [](const State& from, const State& to, EventType event) {
                      std::cout << "Restoring normal operation" << std::endl;
                    }));
 
     // Start FSM
-    fsm.start("RED");
+    fsm.Start("RED");
 
     // Simulate traffic light operation
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     std::cout << "\n--- Normal Operation ---" << std::endl;
-    fsm.processEvent(TIMER_EXPIRED);  // RED -> GREEN
+    fsm.ProcessEvent(TIMER_EXPIRED);  // RED -> GREEN
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    fsm.processEvent(TIMER_EXPIRED);  // GREEN -> YELLOW
+    fsm.ProcessEvent(TIMER_EXPIRED);  // GREEN -> YELLOW
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    fsm.processEvent(TIMER_EXPIRED);  // YELLOW -> RED
+    fsm.ProcessEvent(TIMER_EXPIRED);  // YELLOW -> RED
 
     std::cout << "\n--- Pedestrian Crossing ---" << std::endl;
-    fsm.processEvent(TIMER_EXPIRED);      // RED -> GREEN
-    fsm.processEvent(PEDESTRIAN_BUTTON);  // GREEN -> YELLOW (with guard)
+    fsm.ProcessEvent(TIMER_EXPIRED);      // RED -> GREEN
+    fsm.ProcessEvent(PEDESTRIAN_BUTTON);  // GREEN -> YELLOW (with guard)
 
     std::cout << "\n--- Emergency Override ---" << std::endl;
-    fsm.processEvent(EMERGENCY_OVERRIDE);  // Any -> EMERGENCY
-    fsm.processEvent(NORMAL_OPERATION);    // EMERGENCY -> RED
+    fsm.ProcessEvent(EMERGENCY_OVERRIDE);  // Any -> EMERGENCY
+    fsm.ProcessEvent(NORMAL_OPERATION);    // EMERGENCY -> RED
 
     // Display current state
-    auto current_state = fsm.getCurrentStateName();
+    auto current_state = fsm.GetCurrentStateName();
     if (current_state) {
       std::cout << "\nCurrent state: " << *current_state << std::endl;
     }
 
     // Generate DOT graph
     std::cout << "\n--- State Diagram (DOT format) ---" << std::endl;
-    std::cout << fsm.toDotGraph() << std::endl;
+    std::cout << fsm.ToDotGraph() << std::endl;
 
     // Show history
     std::cout << "--- Transition History ---" << std::endl;
-    const auto& history = fsm.getHistory();
+    const auto& history = fsm.GetHistory();
     for (const auto& entry : history) {
-      auto from_name = fsm.getStateName(entry.from_state);
-      auto to_name = fsm.getStateName(entry.to_state);
+      auto from_name = fsm.GetStateName(entry.from_state);
+      auto to_name = fsm.GetStateName(entry.to_state);
       std::cout << "Event " << entry.event << ": ";
       if (from_name)
         std::cout << *from_name;
@@ -189,13 +189,13 @@ class DoorExample {
     FSM fsm;
 
     // Add states
-    fsm.addState("CLOSED");
-    fsm.addState("OPEN");
-    fsm.addState("LOCKED");
+    fsm.AddState("CLOSED");
+    fsm.AddState("OPEN");
+    fsm.AddState("LOCKED");
 
     // Add transitions with guards
     auto door_guard =
-        makeGuard("door_security_check",
+        MakeGuard("door_security_check",
                   [](const State& from, const State& to, EventType event) {
                     if (event == OPEN_CMD && from.name() == "LOCKED") {
                       std::cout << "Cannot open locked door!" << std::endl;
@@ -205,35 +205,35 @@ class DoorExample {
                   });
 
     // Normal transitions
-    fsm.addTransition("CLOSED", "OPEN", OPEN_CMD);
-    fsm.addTransition("OPEN", "CLOSED", CLOSE_CMD);
-    fsm.addTransition("CLOSED", "LOCKED", LOCK_CMD);
-    fsm.addTransition("LOCKED", "CLOSED", UNLOCK_CMD);
+    fsm.AddTransition("CLOSED", "OPEN", OPEN_CMD);
+    fsm.AddTransition("OPEN", "CLOSED", CLOSE_CMD);
+    fsm.AddTransition("CLOSED", "LOCKED", LOCK_CMD);
+    fsm.AddTransition("LOCKED", "CLOSED", UNLOCK_CMD);
 
     // Guarded transition
-    fsm.addTransition("LOCKED", "OPEN", OPEN_CMD, door_guard);
+    fsm.AddTransition("LOCKED", "OPEN", OPEN_CMD, door_guard);
 
     // Start FSM
-    fsm.start("CLOSED");
+    fsm.Start("CLOSED");
 
     // Test scenarios
-    std::cout << "Initial state: " << *fsm.getCurrentStateName() << std::endl;
+    std::cout << "Initial state: " << *fsm.GetCurrentStateName() << std::endl;
 
-    fsm.processEvent(OPEN_CMD);  // CLOSED -> OPEN
-    std::cout << "After OPEN: " << *fsm.getCurrentStateName() << std::endl;
+    fsm.ProcessEvent(OPEN_CMD);  // CLOSED -> OPEN
+    std::cout << "After OPEN: " << *fsm.GetCurrentStateName() << std::endl;
 
-    fsm.processEvent(CLOSE_CMD);  // OPEN -> CLOSED
-    std::cout << "After CLOSE: " << *fsm.getCurrentStateName() << std::endl;
+    fsm.ProcessEvent(CLOSE_CMD);  // OPEN -> CLOSED
+    std::cout << "After CLOSE: " << *fsm.GetCurrentStateName() << std::endl;
 
-    fsm.processEvent(LOCK_CMD);  // CLOSED -> LOCKED
-    std::cout << "After LOCK: " << *fsm.getCurrentStateName() << std::endl;
+    fsm.ProcessEvent(LOCK_CMD);  // CLOSED -> LOCKED
+    std::cout << "After LOCK: " << *fsm.GetCurrentStateName() << std::endl;
 
-    fsm.processEvent(OPEN_CMD);  // LOCKED -> LOCKED (blocked by guard)
-    std::cout << "After OPEN (should fail): " << *fsm.getCurrentStateName()
+    fsm.ProcessEvent(OPEN_CMD);  // LOCKED -> LOCKED (blocked by guard)
+    std::cout << "After OPEN (should fail): " << *fsm.GetCurrentStateName()
               << std::endl;
 
-    fsm.processEvent(UNLOCK_CMD);  // LOCKED -> CLOSED
-    std::cout << "After UNLOCK: " << *fsm.getCurrentStateName() << std::endl;
+    fsm.ProcessEvent(UNLOCK_CMD);  // LOCKED -> CLOSED
+    std::cout << "After UNLOCK: " << *fsm.GetCurrentStateName() << std::endl;
   }
 };
 
@@ -260,13 +260,13 @@ class CharacterExample {
     int stamina = 100;
 
     // Add states with complex behaviors
-    fsm.addState("IDLE", [&](const State& state, EventType event) {
+    fsm.AddState("IDLE", [&](const State& state, EventType event) {
       std::cout << "Character is idle (Health: " << health
                 << ", Stamina: " << stamina << ")" << std::endl;
       stamina = std::min(100, stamina + 5);  // Regenerate stamina
     });
 
-    fsm.addState(
+    fsm.AddState(
         "MOVING",
         [&](const State& state, EventType event) {
           std::cout << "Character is moving..." << std::endl;
@@ -276,23 +276,23 @@ class CharacterExample {
           std::cout << "Character stopped moving" << std::endl;
         });
 
-    fsm.addState("JUMPING", [&](const State& state, EventType event) {
+    fsm.AddState("JUMPING", [&](const State& state, EventType event) {
       std::cout << "Character is jumping!" << std::endl;
       stamina = std::max(0, stamina - 10);
     });
 
-    fsm.addState("ATTACKING", [&](const State& state, EventType event) {
+    fsm.AddState("ATTACKING", [&](const State& state, EventType event) {
       std::cout << "Character attacks! *SWOOSH*" << std::endl;
       stamina = std::max(0, stamina - 15);
     });
 
-    fsm.addState("DEAD", [&](const State& state, EventType event) {
+    fsm.AddState("DEAD", [&](const State& state, EventType event) {
       std::cout << "Character has died... Press F to pay respects" << std::endl;
       health = 0;
     });
 
     // Create complex transition conditions
-    auto stamina_check = makeGuard(
+    auto stamina_check = MakeGuard(
         "stamina_check",
         [&](const State& from, const State& to, EventType event) {
           int required_stamina = 0;
@@ -312,7 +312,7 @@ class CharacterExample {
         });
 
     auto health_check =
-        makeGuard("health_check",
+        MakeGuard("health_check",
                   [&](const State& from, const State& to, EventType event) {
                     if (health <= 0) {
                       std::cout << "Character has no health!" << std::endl;
@@ -322,7 +322,7 @@ class CharacterExample {
                   });
 
     auto damage_action =
-        makeAction("take_damage",
+        MakeAction("take_damage",
                    [&](const State& from, const State& to, EventType event) {
                      health = std::max(0, health - 25);
                      std::cout << "Character takes damage! Health: " << health
@@ -332,7 +332,7 @@ class CharacterExample {
                      }
                    });
 
-    auto heal_action = makeAction(
+    auto heal_action = MakeAction(
         "heal", [&](const State& from, const State& to, EventType event) {
           health = std::min(100, health + 30);
           std::cout << "Character heals! Health: " << health << std::endl;
@@ -342,28 +342,28 @@ class CharacterExample {
     std::vector<EventType> basic_events = {MOVE, JUMP, ATTACK};
 
     // From IDLE
-    fsm.addTransition("IDLE", "MOVING", MOVE, stamina_check);
-    fsm.addTransition("IDLE", "JUMPING", JUMP, stamina_check);
-    fsm.addTransition("IDLE", "ATTACKING", ATTACK, stamina_check);
+    fsm.AddTransition("IDLE", "MOVING", MOVE, stamina_check);
+    fsm.AddTransition("IDLE", "JUMPING", JUMP, stamina_check);
+    fsm.AddTransition("IDLE", "ATTACKING", ATTACK, stamina_check);
 
     // From MOVING - can transition to other actions
-    fsm.addTransition("MOVING", "IDLE", MOVE);  // Stop moving
-    fsm.addTransition("MOVING", "JUMPING", JUMP, stamina_check);
-    fsm.addTransition("MOVING", "ATTACKING", ATTACK, stamina_check);
+    fsm.AddTransition("MOVING", "IDLE", MOVE);  // Stop moving
+    fsm.AddTransition("MOVING", "JUMPING", JUMP, stamina_check);
+    fsm.AddTransition("MOVING", "ATTACKING", ATTACK, stamina_check);
 
     // From action states back to IDLE
-    fsm.addTransition("JUMPING", "IDLE", JUMP);      // Land
-    fsm.addTransition("ATTACKING", "IDLE", ATTACK);  // Finish attack
+    fsm.AddTransition("JUMPING", "IDLE", JUMP);      // Land
+    fsm.AddTransition("ATTACKING", "IDLE", ATTACK);  // Finish attack
 
     // Damage can happen from any living state
     std::vector<std::string> living_states = {"IDLE", "MOVING", "JUMPING",
                                               "ATTACKING"};
     for (const auto& state : living_states) {
-      fsm.addTransition(state, state, TAKE_DAMAGE,
+      fsm.AddTransition(state, state, TAKE_DAMAGE,
                         damage_action);  // Take damage but stay in state
-      fsm.addTransition(
+      fsm.AddTransition(
           state, "DEAD", DIE,
-          makeCondition(
+          MakeCondition(
               "death_check",
               [&](const State& from, const State& to, EventType event) {
                 return health <= 0;
@@ -371,13 +371,13 @@ class CharacterExample {
               [&](const State& from, const State& to, EventType event) {
                 std::cout << "Character dies!" << std::endl;
               }));
-      fsm.addTransition(state, state, HEAL, heal_action);
+      fsm.AddTransition(state, state, HEAL, heal_action);
     }
 
     // Respawn from death
-    fsm.addTransition(
+    fsm.AddTransition(
         "DEAD", "IDLE", RESPAWN,
-        makeAction("respawn", [&](const State& from, const State& to,
+        MakeAction("respawn", [&](const State& from, const State& to,
                                   EventType event) {
           health = 100;
           stamina = 100;
@@ -386,39 +386,39 @@ class CharacterExample {
         }));
 
     // Start the FSM
-    fsm.start("IDLE");
+    fsm.Start("IDLE");
 
     // Simulate gameplay
     std::cout << "\n--- Character Gameplay Simulation ---" << std::endl;
 
-    fsm.processEvent(MOVE);    // Start moving
-    fsm.processEvent(JUMP);    // Jump while moving
-    fsm.processEvent(JUMP);    // Land
-    fsm.processEvent(ATTACK);  // Attack
-    fsm.processEvent(ATTACK);  // Finish attack
+    fsm.ProcessEvent(MOVE);    // Start moving
+    fsm.ProcessEvent(JUMP);    // Jump while moving
+    fsm.ProcessEvent(JUMP);    // Land
+    fsm.ProcessEvent(ATTACK);  // Attack
+    fsm.ProcessEvent(ATTACK);  // Finish attack
 
     // Try actions without enough stamina
-    fsm.processEvent(JUMP);  // Should fail due to low stamina
-    fsm.processEvent(MOVE);  // Should fail due to low stamina
+    fsm.ProcessEvent(JUMP);  // Should fail due to low stamina
+    fsm.ProcessEvent(MOVE);  // Should fail due to low stamina
 
     // Wait and regenerate stamina
     for (int i = 0; i < 10; ++i) {
-      fsm.processEvent(MOVE);  // Try to trigger idle regeneration
+      fsm.ProcessEvent(MOVE);  // Try to trigger idle regeneration
     }
 
     // Take damage
-    fsm.processEvent(TAKE_DAMAGE);
-    fsm.processEvent(TAKE_DAMAGE);
-    fsm.processEvent(TAKE_DAMAGE);
-    fsm.processEvent(TAKE_DAMAGE);  // Should trigger death
+    fsm.ProcessEvent(TAKE_DAMAGE);
+    fsm.ProcessEvent(TAKE_DAMAGE);
+    fsm.ProcessEvent(TAKE_DAMAGE);
+    fsm.ProcessEvent(TAKE_DAMAGE);  // Should trigger death
 
     // Try to move while dead (should fail)
-    fsm.processEvent(MOVE);
+    fsm.ProcessEvent(MOVE);
 
     // Respawn
-    fsm.processEvent(RESPAWN);
+    fsm.ProcessEvent(RESPAWN);
 
-    std::cout << "\nFinal state: " << *fsm.getCurrentStateName() << std::endl;
+    std::cout << "\nFinal state: " << *fsm.GetCurrentStateName() << std::endl;
     std::cout << "Final stats - Health: " << health << ", Stamina: " << stamina
               << std::endl;
   }

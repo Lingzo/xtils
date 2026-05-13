@@ -26,9 +26,9 @@ bool RouteParams::Has(const std::string& name) const {
 
 // QueryParams implementation
 
-QueryParams::QueryParams(StringView query_string) { Parse(query_string); }
+QueryParams::QueryParams(std::string_view query_string) { Parse(query_string); }
 
-void QueryParams::Parse(StringView query_string) {
+void QueryParams::Parse(std::string_view query_string) {
   if (query_string.empty()) return;
 
   std::string query_str(query_string.data(), query_string.size());
@@ -79,7 +79,7 @@ HttpRequestContext::HttpRequestContext(const HttpRequest& req) : request(&req) {
   std::string uri_str(req.uri.data(), req.uri.size());
   size_t query_pos = uri_str.find('?');
   if (query_pos != std::string::npos) {
-    StringView query_view(uri_str.data() + query_pos + 1,
+    std::string_view query_view(uri_str.data() + query_pos + 1,
                           uri_str.size() - query_pos - 1);
     query = QueryParams(query_view);
   }
@@ -219,7 +219,7 @@ void HttpResponse::Send(HttpServerConnection* conn) {
     for (const auto& h : headers_) {
       server_headers.emplace_back(h.name, h.value);
     }
-    conn->SendResponse(status_.c_str(), server_headers, StringView(body_));
+    conn->SendResponse(status_.c_str(), server_headers, body_);
   }
 }
 
@@ -230,7 +230,7 @@ void HttpResponse::SendJson(HttpServerConnection* conn, const std::string& json,
 
   std::string status_str =
       std::to_string(status) + " " + HttpUtils::GetStatusMessage(status);
-  conn->SendResponse(status_str.c_str(), server_headers, StringView(json));
+  conn->SendResponse(status_str.c_str(), server_headers, json);
 }
 
 void HttpResponse::SendError(HttpServerConnection* conn, int status,
@@ -247,7 +247,7 @@ void HttpResponse::SendError(HttpServerConnection* conn, int status,
                           error_message + "</h1></body></html>";
   std::string status_str = std::to_string(status) + " " + error_message;
 
-  conn->SendResponse(status_str.c_str(), server_headers, StringView(html_body));
+  conn->SendResponse(status_str.c_str(), server_headers, html_body);
 }
 
 void HttpResponse::SendFile(HttpServerConnection* conn,
@@ -269,7 +269,7 @@ void HttpResponse::SendFile(HttpServerConnection* conn,
   HttpHeaders server_headers;
   server_headers.emplace_back("Content-Type", mime_type);
 
-  conn->SendResponse("200 OK", server_headers, StringView(content));
+  conn->SendResponse("200 OK", server_headers, content);
 }
 
 // Route implementation

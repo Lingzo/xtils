@@ -565,7 +565,7 @@ void HttpClient::ProcessChunkedBody() {
     if (current_.receive_buffer.size() < current_.chunk_size + 2) {
       return;  // Wait for more data
     }
-    auto view = StringView(current_.receive_buffer);
+    auto view = std::string_view(current_.receive_buffer);
     current_.bytes_received += current_.chunk_size;
     if (listener_) {
       listener_->OnProgress(this, current_.bytes_received, -1);

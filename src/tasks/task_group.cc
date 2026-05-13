@@ -19,7 +19,7 @@ void TaskGroup::runLoop(int id) {
   xtils::MaybeSetThreadName(name.c_str());
   Task task;
   while (!quit_) {
-    if (tasks_.pop_wait(task)) {
+    if (tasks_.PopWait(task)) {
       try {
         task();
       } catch (const std::exception& e) {
@@ -56,7 +56,7 @@ TaskGroup::TaskGroup(int size, std::shared_ptr<TaskRunner> runner)
 
 TaskGroup::~TaskGroup() {
   if (!quit_) {
-    stop();
+    Stop();
   }
 }
 
@@ -64,24 +64,24 @@ void TaskGroup::PostTask(Task task) { main_runner_->PostTask(task); }
 
 void TaskGroup::PostAsyncTask(Task task, uint32_t ms) {
   if (ms == 0) {
-    tasks_.push(task);
+    tasks_.Push(task);
   } else {
     auto weak = weak_factory_.GetWeakPtr();
     main_runner_->PostDelayedTask(
         [task, weak]() {
-          if (auto ptr = weak.get()) ptr->tasks_.push(task);
+          if (auto ptr = weak.get()) ptr->tasks_.Push(task);
         },
         ms);
   }
 }
 
-std::shared_ptr<TaskRunner> TaskGroup::main_runner() { return main_runner_; }
+std::shared_ptr<TaskRunner> TaskGroup::MainRunner() { return main_runner_; }
 
-bool TaskGroup::is_busy() { return tasks_.size() > threads_.size() * 2; }
-int TaskGroup::size() { return threads_.size(); }
-void TaskGroup::stop() {
+bool TaskGroup::IsBusy() { return tasks_.Size() > threads_.size() * 2; }
+int TaskGroup::Size() { return threads_.size(); }
+void TaskGroup::Stop() {
   quit_ = true;
-  tasks_.quit();
+  tasks_.Quit();
   for (auto& t : threads_) {
     if (t.joinable()) t.join();
   }

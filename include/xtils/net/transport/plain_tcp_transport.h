@@ -1,8 +1,8 @@
 #pragma once
 #include <memory>
 
-#include "../tcp_client.h"
-#include "transport.h"
+#include "xtils/net/tcp_client.h"
+#include "xtils/net/transport/transport.h"
 
 namespace xtils {
 

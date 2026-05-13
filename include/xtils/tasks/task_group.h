@@ -59,12 +59,26 @@ class TaskGroup {
     return result->get_future().get();
   }
 
-  bool is_busy();
-  int size();
-  void stop();
-  bool stop_wait_all(std::chrono::seconds timeout = std::chrono::seconds(5));
+  bool IsBusy();
+  int Size();
+  void Stop();
+  bool StopWaitAll(std::chrono::seconds timeout = std::chrono::seconds(5));
 
-  std::shared_ptr<TaskRunner> main_runner();
+  std::shared_ptr<TaskRunner> MainRunner();
+
+  // Deprecated wrappers
+  [[deprecated("Use IsBusy() instead")]]
+  bool is_busy() { return IsBusy(); }
+  [[deprecated("Use Size() instead")]]
+  int size() { return Size(); }
+  [[deprecated("Use Stop() instead")]]
+  void stop() { Stop(); }
+  [[deprecated("Use StopWaitAll() instead")]]
+  bool stop_wait_all(std::chrono::seconds timeout = std::chrono::seconds(5)) {
+    return StopWaitAll(timeout);
+  }
+  [[deprecated("Use MainRunner() instead")]]
+  std::shared_ptr<TaskRunner> main_runner() { return MainRunner(); }
 
  private:
   void runLoop(int id);

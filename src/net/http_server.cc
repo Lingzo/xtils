@@ -129,19 +129,19 @@ void HttpServer::OnDataAvailable(UnixSocket* sock) {
 // data for a full HTTP request in the buffer.
 size_t HttpServer::ParseOneHttpRequest(HttpServerConnection* conn) {
   auto* rxbuf = reinterpret_cast<char*>(conn->rxbuf.Get());
-  StringView buf_view(rxbuf, conn->rxbuf_used);
+  std::string_view buf_view(rxbuf, conn->rxbuf_used);
   bool has_parsed_first_line = false;
   bool all_headers_received = false;
   bool has_origin = false;
   HttpRequest http_req(conn);
   size_t body_size = 0;
-  LogT("%s", buf_view.ToStr().c_str());
+  LogT("%s", std::string(buf_view).c_str());
 
   // This loop parses the HTTP request headers and sets the |body_offset|.
   while (!buf_view.empty()) {
     size_t next = buf_view.find('\n');
-    if (next == StringView::npos) break;
-    StringView line = buf_view.substr(0, next);
+    if (next == std::string_view::npos) break;
+    std::string_view line = buf_view.substr(0, next);
     buf_view = buf_view.substr(next + 1);  // Eat the current line.
     while (!line.empty() && (line.at(line.size() - 1) == '\r' ||
                              line.at(line.size() - 1) == '\n')) {
@@ -167,32 +167,32 @@ size_t HttpServer::ParseOneHttpRequest(HttpServerConnection* conn) {
     } else {
       // Parse HTTP headers, e.g. "Content-Length: 1234".
       size_t col = line.find(':');
-      if (col == StringView::npos) {
-        LogT("[HTTP] Malformed HTTP header: \"%s\"", line.ToStr().c_str());
+      if (col == std::string_view::npos) {
+        LogT("[HTTP] Malformed HTTP header: \"%s\"", std::string(line).c_str());
         conn->SendResponseAndClose("400 Bad Request", {}, "Bad HTTP header");
         return 0;
       }
       auto hdr_name = line.substr(0, col);
       auto hdr_value = line.substr(col + 2);
       if (http_req.num_headers < http_req.headers.size()) {
-        http_req.headers[http_req.num_headers++] = {hdr_name.ToStr(),
-                                                    hdr_value.ToStr()};
+        http_req.headers[http_req.num_headers++] = {std::string(hdr_name),
+                                                    std::string(hdr_value)};
       } else {
         conn->SendResponseAndClose("400 Bad Request", {},
                                    "Too many HTTP headers");
       }
 
-      if (hdr_name.CaseInsensitiveEq("content-length")) {
-        body_size = static_cast<size_t>(atoi(hdr_value.ToStr().c_str()));
-      } else if (hdr_name.CaseInsensitiveEq("origin")) {
+      if (CaseInsensitiveEq(hdr_name, "content-length")) {
+        body_size = static_cast<size_t>(atoi(std::string(hdr_value).c_str()));
+      } else if (CaseInsensitiveEq(hdr_name, "origin")) {
         has_origin = true;
         http_req.origin = hdr_value;
         if (IsOriginAllowed(hdr_value))
-          conn->origin_allowed_ = hdr_value.ToStr();
-      } else if (hdr_name.CaseInsensitiveEq("connection")) {
-        conn->keepalive_ = hdr_value.CaseInsensitiveEq("keep-alive");
+          conn->origin_allowed_ = std::string(hdr_value);
+      } else if (CaseInsensitiveEq(hdr_name, "connection")) {
+        conn->keepalive_ = CaseInsensitiveEq(hdr_value, "keep-alive");
         http_req.is_websocket_handshake =
-            hdr_value.CaseInsensitiveEq("upgrade");
+            CaseInsensitiveEq(hdr_value, "upgrade");
       }
     }
   }
@@ -242,10 +242,10 @@ void HttpServer::HandleCorsPreflightRequest(const HttpRequest& req) {
       });
 }
 
-bool HttpServer::IsOriginAllowed(StringView origin) {
+bool HttpServer::IsOriginAllowed(std::string_view origin) {
   for (const std::string& allowed_origin : allowed_origins_) {
     if (allowed_origin == "*") return true;
-    if (origin.CaseInsensitiveEq(allowed_origin.c_str())) {
+    if (CaseInsensitiveEq(origin, allowed_origin.c_str())) {
       return true;
     }
   }
@@ -270,7 +270,7 @@ void HttpServerConnection::UpgradeToWebsocket(const HttpRequest& req) {
   auto ws_ver = req.GetHeader("sec-webSocket-version").value_or("");
   auto ws_key = req.GetHeader("sec-webSocket-key").value_or("");
 
-  if (!StringView(ws_ver).CaseInsensitiveEq("13"))
+  if (!CaseInsensitiveEq(std::string_view(ws_ver), "13"))
     return SendResponseAndClose("505 HTTP Version Not Supported", {});
 
   if (ws_key.size() != 24) {
@@ -405,7 +405,7 @@ size_t HttpServer::ParseOneWebsocketFrame(HttpServerConnection* conn) {
     // about message boundaries.
     WebsocketMessage msg(conn);
     msg.data =
-        StringView(reinterpret_cast<const char*>(payload_start), payload_len);
+        std::string_view(reinterpret_cast<const char*>(payload_start), payload_len);
     msg.is_text = opcode == WebSocketOpcode::kText;
     req_handler_->OnWebsocketMessage(msg);
   } else if (opcode == WebSocketOpcode::kClose) {
@@ -434,9 +434,9 @@ void HttpServerConnection::SendResponseHeaders(const char* http_code,
   append(http_code);
   append("\r\n");
   for (const auto& kv : headers) {
-    StringView hdr(kv.name);
+    std::string_view hdr(kv.name);
     if (hdr.empty()) continue;
-    has_connection_header |= hdr.CaseInsensitiveEq("connection");
+    has_connection_header |= CaseInsensitiveEq(hdr, "connection");
     StackString<128> hdr_str("%s: %s", kv.name.c_str(), kv.value.c_str());
     append(hdr_str.c_str());
     append("\r\n");
@@ -483,7 +483,7 @@ void HttpServerConnection::Close() { sock->Shutdown(/*notify=*/true); }
 
 void HttpServerConnection::SendResponse(const char* http_code,
                                         const HttpHeaders& headers,
-                                        StringView content, bool force_close) {
+                                        std::string_view content, bool force_close) {
   if (force_close) keepalive_ = false;
   SendResponseHeaders(http_code, headers, content.size());
   SendResponseBody(content.data(), content.size());
@@ -513,9 +513,9 @@ HttpServerConnection::HttpServerConnection(std::unique_ptr<UnixSocket> s)
 
 HttpServerConnection::~HttpServerConnection() = default;
 
-std::optional<std::string> HttpRequest::GetHeader(StringView name) const {
+std::optional<std::string> HttpRequest::GetHeader(std::string_view name) const {
   for (size_t i = 0; i < num_headers; i++) {
-    if (StringView(headers[i].name).CaseInsensitiveEq(name))
+    if (CaseInsensitiveEq(std::string_view(headers[i].name), name))
       return headers[i].value;
   }
   return std::nullopt;

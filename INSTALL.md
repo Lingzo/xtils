@@ -84,7 +84,7 @@ class SimpleService : public xtils::Service {
   }
   void init() override { // call by app
     LogI("Compenets Init");
-    LogI("params is %d", config.get<int>("params"));
+    LogI("params is %d", config.get<int>("params").value());
     for (int i = 0; i < 10; i++)
       ctx->PostAsyncTask(
           []() {

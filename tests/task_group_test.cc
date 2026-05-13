@@ -53,7 +53,7 @@ TEST_CASE_FIXTURE(TaskGroupTestFixture,
   CHECK(executed);
   CHECK(task_thread_id == main_runner_id);
 
-  tg->stop();
+  tg->Stop();
 }
 
 TEST_CASE_FIXTURE(TaskGroupTestFixture,
@@ -81,13 +81,13 @@ TEST_CASE_FIXTURE(TaskGroupTestFixture,
   CHECK(executed);
   CHECK(task_thread_id != main_runner_id);
 
-  tg->stop();
+  tg->Stop();
 }
 
 TEST_CASE_FIXTURE(TaskGroupTestFixture,
                   "TaskGroup: Sequential shares main_runner") {
   auto async_tg = std::make_shared<TaskGroup>(2);
-  auto sync_tg = TaskGroup::Sequential(async_tg->main_runner());
+  auto sync_tg = TaskGroup::Sequential(async_tg->MainRunner());
 
   // Both should use the same main_runner
   std::thread::id async_main_id = getMainRunnerId(async_tg.get());
@@ -95,8 +95,8 @@ TEST_CASE_FIXTURE(TaskGroupTestFixture,
 
   CHECK(async_main_id == sync_main_id);
 
-  sync_tg->stop();
-  async_tg->stop();
+  sync_tg->Stop();
+  async_tg->Stop();
 }
 
 TEST_CASE_FIXTURE(
@@ -104,7 +104,7 @@ TEST_CASE_FIXTURE(
     "TaskGroup: sync_tg PostTask and async_tg PostTask run on same thread") {
   // This simulates the App architecture: sync_tg and async_tg share main_runner
   auto async_tg = std::make_shared<TaskGroup>(4);
-  auto sync_tg = TaskGroup::Sequential(async_tg->main_runner());
+  auto sync_tg = TaskGroup::Sequential(async_tg->MainRunner());
 
   std::thread::id sync_task_id;
   std::thread::id async_main_task_id;
@@ -131,8 +131,8 @@ TEST_CASE_FIXTURE(
   // Both should run on the same main_runner thread
   CHECK(sync_task_id == async_main_task_id);
 
-  sync_tg->stop();
-  async_tg->stop();
+  sync_tg->Stop();
+  async_tg->Stop();
 }
 
 TEST_CASE_FIXTURE(TaskGroupTestFixture,
@@ -142,7 +142,7 @@ TEST_CASE_FIXTURE(TaskGroupTestFixture,
   auto async_tg = std::make_shared<TaskGroup>(4);
   // Use shared_ptr to allow weak_ptr
   std::shared_ptr<TaskGroup> sync_tg(
-      TaskGroup::Sequential(async_tg->main_runner()).release());
+      TaskGroup::Sequential(async_tg->MainRunner()).release());
 
   std::thread::id main_runner_id = getMainRunnerId(sync_tg.get());
   std::thread::id worker_thread_id;
@@ -183,14 +183,14 @@ TEST_CASE_FIXTURE(TaskGroupTestFixture,
   // Task should execute before callback
   CHECK(task_order < callback_order);
 
-  sync_tg->stop();
-  async_tg->stop();
+  sync_tg->Stop();
+  async_tg->Stop();
 }
 
 TEST_CASE_FIXTURE(TaskGroupTestFixture,
                   "TaskGroup: Multiple spawns maintain thread safety") {
   auto async_tg = std::make_shared<TaskGroup>(4);
-  auto sync_tg = TaskGroup::Sequential(async_tg->main_runner());
+  auto sync_tg = TaskGroup::Sequential(async_tg->MainRunner());
 
   std::atomic<int> main_thread_counter{0};
   const int num_tasks = 100;
@@ -217,8 +217,8 @@ TEST_CASE_FIXTURE(TaskGroupTestFixture,
   // All tasks should have run on main_runner
   CHECK(main_thread_counter == num_tasks);
 
-  sync_tg->stop();
-  async_tg->stop();
+  sync_tg->Stop();
+  async_tg->Stop();
 }
 
 TEST_CASE_FIXTURE(TaskGroupTestFixture,
@@ -226,7 +226,7 @@ TEST_CASE_FIXTURE(TaskGroupTestFixture,
   auto async_tg = std::make_shared<TaskGroup>(4);
   // Use shared_ptr to allow weak_ptr
   std::shared_ptr<TaskGroup> sync_tg(
-      TaskGroup::Sequential(async_tg->main_runner()).release());
+      TaskGroup::Sequential(async_tg->MainRunner()).release());
 
   std::atomic<int> concurrent_count{0};
   std::atomic<int> max_concurrent{0};
@@ -273,8 +273,8 @@ TEST_CASE_FIXTURE(TaskGroupTestFixture,
   // All callbacks should have been executed
   CHECK(callback_count == num_tasks);
 
-  sync_tg->stop();
-  async_tg->stop();
+  sync_tg->Stop();
+  async_tg->Stop();
 }
 
 int main() {

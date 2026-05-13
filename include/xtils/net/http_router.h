@@ -44,7 +44,7 @@ class RouteParams {
 // Query parameters from URL
 class QueryParams {
  public:
-  explicit QueryParams(StringView query_string);
+  explicit QueryParams(std::string_view query_string);
   QueryParams() = default;
 
   // Get parameter value
@@ -67,7 +67,7 @@ class QueryParams {
   }
 
  private:
-  void Parse(StringView query_string);
+  void Parse(std::string_view query_string);
   std::multimap<std::string, std::string> params_;
 };
 

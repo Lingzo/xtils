@@ -77,6 +77,7 @@ thread_local struct {
 
 }  // namespace
 
+namespace xtils {
 namespace logger {
 
 // Simple log entry structure
@@ -283,50 +284,53 @@ Logger::Logger() : impl_(std::make_unique<Impl>()) {}
 
 Logger::~Logger() = default;
 
-void Logger::setLevel(log_level level) { impl_->setLevel(level); }
+void Logger::SetLevel(log_level level) { impl_->setLevel(level); }
 
-log_level Logger::level() const { return impl_->level(); }
+log_level Logger::Level() const { return impl_->level(); }
 
-void Logger::write_log_async(const char* tag, const source_loc& loc,
+void Logger::WriteLogAsync(const char* tag, const source_loc& loc,
                              log_level level, const std::string& message) {
   impl_->write_log_async(tag, loc, level, message);
 }
 
-void Logger::write_log_sync(const char* tag, const source_loc& loc,
+void Logger::WriteLogSync(const char* tag, const source_loc& loc,
                             log_level level, const std::string& message) {
   impl_->write_log_sync(tag, loc, level, message);
 }
-void Logger::write_raw(const std::string& message) {
+void Logger::WriteRaw(const std::string& message) {
   if (impl_) impl_->write_raw(message);
 }
 
-void Logger::addSink(std::unique_ptr<Sink> s) { impl_->addSink(std::move(s)); }
+void Logger::AddSink(std::unique_ptr<Sink> s) { impl_->addSink(std::move(s)); }
 
-void Logger::flush() { impl_->flush(); }
+void Logger::Flush() { impl_->flush(); }
 
-void Logger::shutdown() { impl_->shutdown(); }
+void Logger::Shutdown() { impl_->shutdown(); }
 
-size_t Logger::get_dropped_count() const { return impl_->get_dropped_count(); }
+size_t Logger::GetDroppedCount() const { return impl_->get_dropped_count(); }
 
 // Global logger instance
-Logger* default_logger() {
+Logger* DefaultLogger() {
   static Logger logger;
   return &logger;
 }
 
-void set_level(Logger* logger, log_level level) {
+void SetLevel(Logger* logger, log_level level) {
   if (logger) {
-    logger->setLevel(level);
+    logger->SetLevel(level);
   }
 }
 
 }  // namespace logger
+}  // namespace xtils
+
+namespace xtils {
 
 // Optimized log writing function - main entry point for all logging
 void _write_log(logger::Logger* log, const char* name,
                 const logger::source_loc& lc, logger::log_level level,
                 const char* fmt, ...) {
-  if (!log || log->level() > level) return;
+  if (!log || log->Level() > level) return;
   constexpr size_t kBufSize = MAX_LINE_LOG_SIZE;
   constexpr const char* kSuffix = "...[truncated]";
   constexpr size_t kSuffixLen = 14;
@@ -348,8 +352,10 @@ void _write_log(logger::Logger* log, const char* name,
   }
   // Use async logging for better performance, except for info and above
   if (level > logger::info) {
-    log->write_log_sync(name, lc, level, std::string(buf, n));
+    log->WriteLogSync(name, lc, level, std::string(buf, n));
   } else {
-    log->write_log_async(name, lc, level, std::string(buf, n));
+    log->WriteLogAsync(name, lc, level, std::string(buf, n));
   }
 }
+
+}  // namespace xtils

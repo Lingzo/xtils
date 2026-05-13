@@ -1,5 +1,6 @@
 #include "xtils/net/websocket_client.h"
 
+#include <algorithm>
 #include <cstring>
 #include <sstream>
 

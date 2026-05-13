@@ -1,5 +1,7 @@
 #include "xtils/utils/base64.h"
 
+#include <cstdint>
+
 #include "xtils/logging/logger.h"
 
 namespace xtils {

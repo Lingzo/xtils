@@ -10,6 +10,7 @@
 #include <set>
 #include <sstream>
 
+#include "xtils/utils/file_utils.h"
 #include "xtils/utils/string_utils.h"
 
 namespace xtils {
@@ -254,46 +255,24 @@ std::string EscapeHtml(const std::string& text) {
 }
 
 std::string GetFileExtension(const std::string& filename) {
-  size_t dot_pos = filename.find_last_of('.');
-  if (dot_pos != std::string::npos) {
-    return filename.substr(dot_pos);
-  }
-  return "";
+  return file_utils::extension(filename);
 }
 
 std::string GetBasename(const std::string& path) {
-  size_t slash_pos = path.find_last_of("/\\");
-  if (slash_pos != std::string::npos) {
-    return path.substr(slash_pos + 1);
-  }
-  return path;
+  return file_utils::bsname(path);
 }
 
 bool FileExists(const std::string& path) {
-  return std::filesystem::exists(path);
+  return file_utils::exists(path);
 }
 
 size_t GetFileSize(const std::string& path) {
-  try {
-    return std::filesystem::file_size(path);
-  } catch (const std::filesystem::filesystem_error&) {
-    return 0;
-  }
+  return file_utils::file_size(path);
 }
 
 std::string ReadFileContent(const std::string& path) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
-    return "";
-  }
-
-  file.seekg(0, std::ios::end);
-  size_t size = file.tellg();
-  file.seekg(0, std::ios::beg);
-
-  std::string content(size, '\0');
-  file.read(&content[0], size);
-
+  std::string content;
+  if (!file_utils::read(path, &content)) return "";
   return content;
 }
 

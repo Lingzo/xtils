@@ -35,46 +35,46 @@ App::~App() {
   }
 }
 
-App *App::ins() {
+App *App::Ins() {
   static App app;
   return &app;
 }
 
 void App::default_config() {
-  config_.define("xtils.threads", "threds numbers", 4)
-      .define("xtils.inspect.enable", "enable inspect or not", true)
-      .define("xtils.inspect.port", "inspect prot", 9090)
-      .define("xtils.inspect.addr", "inspect address", "0.0.0.0")
-      .define("xtils.inspect.cors", "inspect cross addr", "*")
-      .define("xtils.log.file.name", "log file name,default in current dir",
+  config_.Define("xtils.threads", "threds numbers", 4)
+      .Define("xtils.inspect.enable", "enable inspect or not", true)
+      .Define("xtils.inspect.port", "inspect prot", 9090)
+      .Define("xtils.inspect.addr", "inspect address", "0.0.0.0")
+      .Define("xtils.inspect.cors", "inspect cross addr", "*")
+      .Define("xtils.log.file.name", "log file name,default in current dir",
               "./log/app.log")
-      .define("xtils.log.file.max_bytes", "log file size, default 4M",
+      .Define("xtils.log.file.max_bytes", "log file size, default 4M",
               4 * 1024 * 1024)
-      .define("xtils.log.file.max_items", "max file number, app.max.log", 5)
-      .define("xtils.log.file.enable", "log to file or not", false)
-      .define("xtils.log.level",
+      .Define("xtils.log.file.max_items", "max file number, app.max.log", 5)
+      .Define("xtils.log.file.enable", "log to file or not", false)
+      .Define("xtils.log.level",
               "log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error", 1)
-      .define("xtils.log.console.enable", "log to console or not", true);
+      .Define("xtils.log.console.enable", "log to console or not", true);
 }
 void App::parse_args(const std::vector<std::string> &args, bool allow_exit) {
-  if (!config_.parse_args(args, allow_exit)) {
+  if (!config_.ParseArgs(args, allow_exit)) {
     std::cerr << "Failed to parse command line arguments" << std::endl;
-    std::cerr << config_.help() << std::endl;
+    std::cerr << config_.Help() << std::endl;
     exit(1);
   }
 
   // Validate configuration
-  if (!config_.validate()) {
+  if (!config_.Validate()) {
     std::cerr << "Configuration validation failed:" << std::endl;
-    auto missing = config_.missing_required();
+    auto missing = config_.MissingRequired();
     for (const auto &key : missing) {
       std::cerr << "  Missing required parameter: " << key << std::endl;
     }
-    std::cerr << config_.help() << std::endl;
+    std::cerr << config_.Help() << std::endl;
     exit(1);
   }
 }
-void App::init(const std::vector<std::string> &args) {
+void App::Init(const std::vector<std::string> &args) {
   TRACE_SCOPE("App:init");
   // Setup signal handlers for graceful shutdown
   system::SignalHandler::Initialize();
@@ -86,50 +86,50 @@ void App::init(const std::vector<std::string> &args) {
   init_log();
 
   // init thread pool
-  int threads_size = conf().get_int("xtils.threads");
+  int threads_size = Conf().GetInt("xtils.threads").value();
   CHECK(threads_size > 1);
   async_tg_ = std::make_unique<TaskGroup>(threads_size);
   // init event manager
   em_ = std::make_unique<EventManager>(
-      TaskGroup::Sequential(async_tg_->main_runner()));
+      TaskGroup::Sequential(async_tg_->MainRunner()));
   timer_ = std::make_unique<SteadyTimer>(async_tg_.get());
   initialized_ = true;
 }
 
 void App::init_log() {
   TRACE_SCOPE("App:init_log");
-  if (conf().get_bool("xtils.log.console.enable")) {
-    logger::default_logger()->addSink(std::make_unique<logger::ConsoleSink>());
+  if (Conf().GetBool("xtils.log.console.enable").value()) {
+    logger::DefaultLogger()->AddSink(std::make_unique<logger::ConsoleSink>());
   }
-  if (conf().get_bool("xtils.log.file.enable")) {
-    std::string file = conf().get_string("xtils.log.file.name");
-    int max_bytes = conf().get_int("xtils.log.file.max_bytes");
-    int max_items = conf().get_int("xtils.log.file.max_items");
+  if (Conf().GetBool("xtils.log.file.enable").value()) {
+    std::string file = Conf().GetString("xtils.log.file.name").value();
+    int max_bytes = Conf().GetInt("xtils.log.file.max_bytes").value();
+    int max_items = Conf().GetInt("xtils.log.file.max_items").value();
     if (!file_utils::exists(file)) {
       bool create_dir = file_utils::mkdir(file_utils::dirname(file));
       if (!create_dir) {
         LogE("can't open log file, %s", file.c_str());
       } else {
-        logger::default_logger()->addSink(
+        logger::DefaultLogger()->AddSink(
             std::make_unique<logger::FileSink>(file, max_bytes, max_items));
       }
     } else {
-      logger::default_logger()->addSink(
+      logger::DefaultLogger()->AddSink(
           std::make_unique<logger::FileSink>(file, max_bytes, max_items));
     }
   }
-  int log_level = conf().get_int("xtils.log.level");
+  int log_level = Conf().GetInt("xtils.log.level").value();
   CHECK(log_level < logger::max);
-  logger::set_level(logger::default_logger(), (logger::log_level)log_level);
+  logger::SetLevel(logger::DefaultLogger(), (logger::log_level)log_level);
 }
 
 void App::init_inspect() {
 #ifndef INSPECT_DISABLE
   TRACE_SCOPE("App:init_inspect");
-  if (conf().get_bool("xtils.inspect.enable")) {
-    std::string addr = conf().get_string("xtils.inspect.addr");
-    int port = conf().get_int("xtils.inspect.port");
-    std::string cors = conf().get_string("xtils.inspect.cors");
+  if (Conf().GetBool("xtils.inspect.enable").value()) {
+    std::string addr = Conf().GetString("xtils.inspect.addr").value();
+    int port = Conf().GetInt("xtils.inspect.port").value();
+    std::string cors = Conf().GetString("xtils.inspect.cors").value();
 
     Inspect::Get().Init(addr, port);
     Inspect::Get().SetCORS(cors);
@@ -137,10 +137,10 @@ void App::init_inspect() {
          cors.c_str());
   }
 
-  if (conf().get_bool("xtils.inspect.enable")) {
+  if (Conf().GetBool("xtils.inspect.enable").value()) {
     INSPECT_ROUTE("/api/config", "config in process",
                   [this](const Inspect::Request &req, Inspect::Response &resp) {
-                    resp = Inspect::Json(config_.to_json());
+                    resp = Inspect::Json(config_.ToJson());
                   });
     INSPECT_ROUTE("/api/tracer", "get tracer info",
                   [this](const Inspect::Request &req, Inspect::Response &resp) {
@@ -164,9 +164,9 @@ void App::init_inspect() {
 void App::pre_run() {
   // all config
   for (const auto &s : service_) {
-    for (const auto &e : s->config.options()) {
+    for (const auto &e : s->config.Options()) {
       const auto &opt = e.second;
-      config_.define(s->name + "." + opt.name, opt.description,
+      config_.Define(s->name + "." + opt.name, opt.description,
                      opt.default_value, opt.required);
     }
   }
@@ -175,9 +175,9 @@ void App::pre_run() {
 
   // sub config
   for (auto &s : service_) {
-    auto sub = config_.get(s->name);
+    auto sub = config_.Get(s->name);
     if (sub) {
-      s->config.parse_json(*sub);
+      s->config.ParseJson(*sub);
     }
   }
 
@@ -186,21 +186,21 @@ void App::pre_run() {
 
   for (auto &p : service_) {
     p->ctx = this;
-    p->init();
+    p->Init();
     LogI("Init %s service successed!!", p->name.c_str());
   }
 }
 
-void App::run_daemon() {
+void App::RunDaemon() {
   if (running_) {
     LogW("App is already running");
     return;
   }
-  main_ = std::thread(std::bind(&App::run, this));
+  main_ = std::thread(std::bind(&App::Run, this));
   bool ret = async_tg_->RunUntilCompleted([]() { return true; });
 }
 
-void App::run() {
+void App::Run() {
   CHECK(initialized_);
   if (running_) {
     LogW("App is already running");
@@ -210,51 +210,51 @@ void App::run() {
   // process service
   pre_run();
   LogI("App starting main run loop...");
-  auto t1 = steady::GetCurrentMs();
-  while (isOk()) {
+  auto t1 = std::make_shared<std::atomic<int64_t>>(steady::GetCurrentMs());
+  while (IsOk()) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    auto diff_ms = steady::GetCurrentMs() - t1;
+    auto diff_ms = steady::GetCurrentMs() - t1->load(std::memory_order_relaxed);
     if (diff_ms > 5000) {
       LogW("main threads blocked, %fms!!!", diff_ms);
     } else if (diff_ms > 2000) {
-      spawn([&t1]() { t1 = steady::GetCurrentMs(); });
+      Spawn([t1]() { t1->store(steady::GetCurrentMs(), std::memory_order_relaxed); });
     }
-    if (async_tg_->is_busy()) {
+    if (async_tg_->IsBusy()) {
       LogW("task group is busy, maybe use more threads, cur is: %d!!!",
-           async_tg_->size());
+           async_tg_->Size());
     }
   }
   LogI("App shutting down...");
   deinit();
   LogI("Exit main");
-  logger::default_logger()->shutdown();  // flush all log
+  logger::DefaultLogger()->Shutdown();  // flush all log
   running_ = false;
 }
 
 void App::deinit() {
   TRACE_SCOPE("App::deinit");
 #ifndef INSPECT_DISABLE
-  if (conf().get_bool("xtils.inspect.enable")) {
+  if (Conf().GetBool("xtils.inspect.enable").value()) {
     Inspect::Get().Stop();
   }
 #endif
-  async_tg_->stop();  // stop task group
-  em_->stop();        // stop event manager
+  async_tg_->Stop();  // stop task group
+  em_->Stop();        // stop event manager
 
   for (auto &p : service_) {
-    p->deinit();
+    p->Deinit();
   }
   em_.reset();
   timer_.reset();
   async_tg_.reset();
 }
 
-void App::spawn(Task task) {
-  async_tg_->main_runner()->PostTask(std::move(task));
+void App::Spawn(Task task) {
+  async_tg_->MainRunner()->PostTask(std::move(task));
 }
 
-void App::spawn_async(Task task, Task main) {
-  auto main_runner = async_tg_->main_runner();
+void App::SpawnAsync(Task task, Task main) {
+  auto main_runner = async_tg_->MainRunner();
   async_tg_->PostAsyncTask(
       [task = std::move(task), main = std::move(main), main_runner]() {
         {
@@ -267,11 +267,11 @@ void App::spawn_async(Task task, Task main) {
       });
 }
 
-void App::every(uint32_t ms, TimerCallback cb) {
+void App::Every(uint32_t ms, TimerCallback cb) {
   timer_->SetRepeatingTimer(ms, cb);
 }
 
-void App::delay(uint32_t ms, TimerCallback cb) {
+void App::Delay(uint32_t ms, TimerCallback cb) {
   timer_->SetRelativeTimer(ms, cb, TimerType::kOneShot);
 }
 
@@ -293,20 +293,20 @@ void App::print_banner() {
   StackString<1024> banner(fmt.c_str(), major_, minor_, patch_,
                            build_time_.c_str(),
                            names.empty() ? "None" : names.c_str());
-  logger::default_logger()->write_raw(banner.c_str());
+  logger::DefaultLogger()->WriteRaw(banner.c_str());
 }
 
-void App::registor(std::list<std::shared_ptr<IService>> services) {
+void App::Register(std::list<std::shared_ptr<IService>> services) {
   CHECK(!running_);
   for (auto &p : services) {
-    registor(p);
+    Register(p);
   }
 }
 
-void App::registor(std::shared_ptr<IService> p) {
+void App::Register(std::shared_ptr<IService> p) {
   CHECK(!running_);
   service_.push_back(p);
 }
 
-bool App::is_running() { return running_; }
+bool App::IsRunning() { return running_; }
 }  // namespace xtils
