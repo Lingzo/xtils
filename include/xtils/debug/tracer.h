@@ -86,7 +86,7 @@ class Tracer {
 
   static constexpr size_t MAX_EVENTS = 1e4;
 
-  Tracer() : write_index_(0), full_(false) { events_ = new Event[MAX_EVENTS]; }
+  Tracer() : write_index_(0) { events_ = new Event[MAX_EVENTS]; }
 
   ~Tracer() { delete[] events_; }
 
@@ -103,8 +103,9 @@ class Tracer {
 
   void data(std::string *out) {
     size_t snapshot = write_index_.load(std::memory_order_acquire);
-    size_t count = full_ ? MAX_EVENTS : snapshot;
-    size_t start = full_ ? snapshot % MAX_EVENTS : 0;
+    bool is_full = snapshot >= MAX_EVENTS;
+    size_t count = is_full ? MAX_EVENTS : snapshot;
+    size_t start = is_full ? snapshot % MAX_EVENTS : 0;
 
     out->clear();
     out->reserve(count * 512);
@@ -193,16 +194,12 @@ class Tracer {
     return cached_pid;
   }
   void pushEvent(const Event &e) {
-    size_t idx = write_index_.fetch_add(1, std::memory_order_release);
-    if (idx >= MAX_EVENTS) {
-      full_ = true;
-    }
+    size_t idx = write_index_.fetch_add(1, std::memory_order_acq_rel);
     events_[idx % MAX_EVENTS] = e;
   }
 
   std::atomic<size_t> write_index_;
   Event *events_;
-  std::atomic<bool> full_{false};
 };
 
 // RAII 范围事件

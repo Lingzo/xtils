@@ -86,7 +86,7 @@ void App::Init(const std::vector<std::string> &args) {
   init_log();
 
   // init thread pool
-  int threads_size = Conf().GetInt("xtils.threads").value();
+  int threads_size = Conf().GetInt("xtils.threads").value_or(4);
   CHECK(threads_size > 1);
   async_tg_ = std::make_unique<TaskGroup>(threads_size);
   // init event manager
@@ -98,13 +98,13 @@ void App::Init(const std::vector<std::string> &args) {
 
 void App::init_log() {
   TRACE_SCOPE("App:init_log");
-  if (Conf().GetBool("xtils.log.console.enable").value()) {
+  if (Conf().GetBool("xtils.log.console.enable").value_or(true)) {
     logger::DefaultLogger()->AddSink(std::make_unique<logger::ConsoleSink>());
   }
-  if (Conf().GetBool("xtils.log.file.enable").value()) {
-    std::string file = Conf().GetString("xtils.log.file.name").value();
-    int max_bytes = Conf().GetInt("xtils.log.file.max_bytes").value();
-    int max_items = Conf().GetInt("xtils.log.file.max_items").value();
+  if (Conf().GetBool("xtils.log.file.enable").value_or(false)) {
+    std::string file = Conf().GetString("xtils.log.file.name").value_or("./log/app.log");
+    int max_bytes = Conf().GetInt("xtils.log.file.max_bytes").value_or(4 * 1024 * 1024);
+    int max_items = Conf().GetInt("xtils.log.file.max_items").value_or(5);
     if (!file_utils::exists(file)) {
       bool create_dir = file_utils::mkdir(file_utils::dirname(file));
       if (!create_dir) {
@@ -118,7 +118,7 @@ void App::init_log() {
           std::make_unique<logger::FileSink>(file, max_bytes, max_items));
     }
   }
-  int log_level = Conf().GetInt("xtils.log.level").value();
+  int log_level = Conf().GetInt("xtils.log.level").value_or(1);
   CHECK(log_level < logger::max);
   logger::SetLevel(logger::DefaultLogger(), (logger::log_level)log_level);
 }
@@ -126,10 +126,10 @@ void App::init_log() {
 void App::init_inspect() {
 #ifndef INSPECT_DISABLE
   TRACE_SCOPE("App:init_inspect");
-  if (Conf().GetBool("xtils.inspect.enable").value()) {
-    std::string addr = Conf().GetString("xtils.inspect.addr").value();
-    int port = Conf().GetInt("xtils.inspect.port").value();
-    std::string cors = Conf().GetString("xtils.inspect.cors").value();
+  if (Conf().GetBool("xtils.inspect.enable").value_or(true)) {
+    std::string addr = Conf().GetString("xtils.inspect.addr").value_or("0.0.0.0");
+    int port = Conf().GetInt("xtils.inspect.port").value_or(9090);
+    std::string cors = Conf().GetString("xtils.inspect.cors").value_or("*");
 
     Inspect::Get().Init(addr, port);
     Inspect::Get().SetCORS(cors);
@@ -137,7 +137,7 @@ void App::init_inspect() {
          cors.c_str());
   }
 
-  if (Conf().GetBool("xtils.inspect.enable").value()) {
+  if (Conf().GetBool("xtils.inspect.enable").value_or(true)) {
     INSPECT_ROUTE("/api/config", "config in process",
                   [this](const Inspect::Request &req, Inspect::Response &resp) {
                     resp = Inspect::Json(config_.ToJson());
@@ -234,7 +234,7 @@ void App::Run() {
 void App::deinit() {
   TRACE_SCOPE("App::deinit");
 #ifndef INSPECT_DISABLE
-  if (Conf().GetBool("xtils.inspect.enable").value()) {
+  if (Conf().GetBool("xtils.inspect.enable").value_or(true)) {
     Inspect::Get().Stop();
   }
 #endif

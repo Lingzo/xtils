@@ -15,9 +15,7 @@ class runtime_error : public std::runtime_error {
     std::cerr << system::GetStackTrace() << std::endl;
   }
 };
-}  // namespace xtils
 
-namespace xtils {
 inline bool Try(std::function<void()> cb, bool log = false) {
   try {
     cb();
