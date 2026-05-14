@@ -15,7 +15,7 @@
 
 #include "xtils/tasks/thread_task_runner.h"
 
-#define DOCTEST_CONFIG_IMPLEMENT
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 using namespace xtils;
@@ -236,7 +236,3 @@ TEST_CASE("UnixSocket: Listen + Connect + Data with ThreadTaskRunner") {
   server->Shutdown(false);
 }
 
-int main() {
-  doctest::Context context;
-  return context.run();
-}

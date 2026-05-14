@@ -10,7 +10,7 @@
 #include <thread>
 #include <vector>
 
-#define DOCTEST_CONFIG_IMPLEMENT
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 using namespace xtils;
@@ -350,7 +350,3 @@ TEST_CASE("TCP: connect to non-listening port fails") {
   client.Disconnect();
 }
 
-int main() {
-  doctest::Context context;
-  return context.run();
-}

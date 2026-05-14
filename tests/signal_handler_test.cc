@@ -4,7 +4,7 @@
 #include <chrono>
 #include <thread>
 
-#define DOCTEST_CONFIG_IMPLEMENT
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 using namespace xtils::system;
@@ -76,7 +76,3 @@ TEST_CASE("SignalHandler: Cleanup without initialize is safe") {
   SignalHandler::Cleanup();  // Should not crash
 }
 
-int main() {
-  doctest::Context context;
-  return context.run();
-}

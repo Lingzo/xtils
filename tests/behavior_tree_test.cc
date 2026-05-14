@@ -5,7 +5,7 @@
 #include <thread>
 #include <vector>
 
-#define DOCTEST_CONFIG_IMPLEMENT
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 using namespace xtils;
@@ -919,8 +919,3 @@ TEST_CASE("BtFactory: shared blackboard") {
   CHECK(bb->get<int>("counter").value() == 10);
 }
 
-int main() {
-  doctest::Context context;
-  int result = context.run();
-  return result;
-}

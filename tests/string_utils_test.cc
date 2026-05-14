@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#define DOCTEST_CONFIG_IMPLEMENT
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 using namespace xtils;
@@ -505,8 +505,3 @@ TEST_CASE("FindLineWithOffset") {
   }
 }
 
-int main() {
-  doctest::Context context;
-  int result = context.run();
-  return result;
-}

@@ -196,8 +196,14 @@ class Node {
 
 class BtLogger {
  public:
+  virtual ~BtLogger() = default;
   virtual void update(const Json& tree) {}
   virtual void record(const Node&, Status from, Status to) {}
+  virtual void onTickBegin(uint64_t tick) {}
+  virtual void onTickEnd(uint64_t tick, Status result) {}
+
+ protected:
+  uint64_t current_tick_{0};
 };
 
 // Composite nodes
@@ -335,6 +341,7 @@ class BtTree {
   std::vector<Node::Ptr> nodes_;
   std::shared_ptr<AnyMap> blackboard_;
   std::shared_ptr<BtLogger> logger_;
+  uint64_t tick_count_{0};
 
   // Pause state
   std::atomic<bool> paused_{false};

@@ -6,7 +6,7 @@
 #include <memory>
 #include <thread>
 
-#define DOCTEST_CONFIG_IMPLEMENT
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 using namespace xtils;
@@ -310,8 +310,3 @@ TEST_CASE("Exception in timer callback does not crash") {
   tg->Stop();
 }
 
-int main() {
-  doctest::Context context;
-  int result = context.run();
-  return result;
-}

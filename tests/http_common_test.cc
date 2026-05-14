@@ -3,7 +3,7 @@
 #include <map>
 #include <string>
 
-#define DOCTEST_CONFIG_IMPLEMENT
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 using namespace xtils;
@@ -258,7 +258,3 @@ TEST_CASE("HttpUtils: header utilities") {
   CHECK(headers.size() == 2);  // Should update, not add duplicate
 }
 
-int main() {
-  doctest::Context context;
-  return context.run();
-}

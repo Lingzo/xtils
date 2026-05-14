@@ -6,7 +6,7 @@
 
 #include "xtils/utils/file_utils.h"
 
-#define DOCTEST_CONFIG_IMPLEMENT
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 using namespace xtils::logger;
@@ -108,12 +108,3 @@ TEST_CASE("FileSink: write with offset") {
   cleanup();
 }
 
-int main() {
-  doctest::Context context;
-  int result = context.run();
-
-  // Final cleanup
-  cleanup();
-
-  return result;
-}

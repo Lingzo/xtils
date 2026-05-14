@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstring>
 
-#define DOCTEST_CONFIG_IMPLEMENT
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 using namespace xtils;
@@ -169,8 +169,3 @@ TEST_CASE("PagedMemory: destructor") {
   CHECK(true);
 }
 
-int main() {
-  doctest::Context context;
-  int result = context.run();
-  return result;
-}

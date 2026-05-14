@@ -12,7 +12,7 @@
 
 #include "xtils/net/tcp_client.h"
 
-#define DOCTEST_CONFIG_IMPLEMENT
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 using namespace xtils;
@@ -432,7 +432,3 @@ TEST_CASE("HTTP: middleware") {
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 }
 
-int main() {
-  doctest::Context context;
-  return context.run();
-}

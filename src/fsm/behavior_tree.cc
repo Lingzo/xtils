@@ -336,7 +336,15 @@ Status BtTree::tick() {
   if (paused_.load()) {
     return Status::Running;
   }
-  return root_->tick();
+  ++tick_count_;
+  if (logger_) {
+    logger_->onTickBegin(tick_count_);
+  }
+  Status result = root_->tick();
+  if (logger_) {
+    logger_->onTickEnd(tick_count_, result);
+  }
+  return result;
 }
 void BtTree::reset() { root_->reset(); }
 

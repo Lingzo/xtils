@@ -1,6 +1,10 @@
 #include <xtils/app/service.h>
 #include <xtils/fsm/behavior_tree.h>
+#include <xtils/fsm/bt_compositelogger.h>
 #include <xtils/fsm/bt_filelogger.h>
+#ifndef INSPECT_DISABLE
+#include <xtils/fsm/bt_inspectlogger.h>
+#endif
 #include <xtils/utils/file_utils.h>
 
 #include <exception>
@@ -139,9 +143,14 @@ class BtService : public xtils::Service<BtService> {
     try {
       auto loaded = factory.LoadTreesFromDirectory(tree_dir_);
       LogI("Loaded %zu behavior tree files from %s", loaded, tree_dir_.c_str());
+      // Composite logger: file (offline) + inspect (online)
+      auto logger = std::make_shared<xtils::BtCompositeLogger>();
+      logger->Add(std::make_shared<xtils::BtFileLogger>("./bt.jsonl"));
+#ifndef INSPECT_DISABLE
+      logger->Add(std::make_shared<xtils::BtInspectLogger>("/ws/bt"));
+#endif
       tree_ = factory.buildFromRegisteredTree(
-          main_tree_name_, nullptr,
-          std::make_shared<xtils::BtFileLogger>("./bt.log"));
+          main_tree_name_, nullptr, logger);
     } catch (const std::exception& e) {
       LogE("Failed to initialize behavior tree from %s: %s", tree_dir_.c_str(),
            e.what());
