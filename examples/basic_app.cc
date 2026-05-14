@@ -26,7 +26,7 @@ class SimpleService : public xtils::Service<SimpleService> {
     return fib(n - 1) + fib(n - 2);
   }
   void Init() override {
-    LogI("Compenets Init %s", xtils::type_name<SimpleService>());
+    LogI("Compenets Init %s", xtils::type_name_cstr<SimpleService>());
     LogI("params is %d", config.Get<int>("params").value());
     for (int i = 0; i < 10; i++)
       ctx->SpawnAsync(

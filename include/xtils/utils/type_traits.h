@@ -30,4 +30,11 @@ constexpr std::string_view pretty_name() {
   return type_name<U>();
 }
 
+// Null-terminated version, safe for printf-style %s.
+template <typename T>
+const char* type_name_cstr() {
+  static const std::string s{type_name<T>()};
+  return s.c_str();
+}
+
 }  // namespace xtils
