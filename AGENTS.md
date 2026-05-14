@@ -18,7 +18,16 @@ src/             — implementation: app/ config/ debug/ fsm/ logging/ net/ syst
 tests/           — unit tests (*_test.cc), uses doctest
 examples/        — usage examples
 cmake/           — CMake helpers (autogen, config template)
+docs/            — AI-friendly documentation (architecture, API reference, CHANGELOG)
 ```
+
+## Documentation
+
+See `docs/` for detailed AI-friendly references:
+- `docs/README.md` — overview & navigation
+- `docs/architecture.md` — project structure, build system, module dependencies
+- `docs/api-reference.md` — complete public API by module
+- `docs/CHANGELOG.md` — version history and breaking changes
 
 ## Key Commands
 
