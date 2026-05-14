@@ -1,3 +1,5 @@
+#ifdef USE_OPENSSL
+
 #include <fcntl.h>
 #include <openssl/err.h>
 
@@ -184,3 +186,5 @@ void TlsTransport::Close() {
 }
 
 }  // namespace xtils
+
+#endif  // USE_OPENSSL

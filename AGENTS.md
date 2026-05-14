@@ -52,8 +52,7 @@ clang-format -i src/**/*.cc include/**/*.h
 | `BUILD_TESTS` | OFF | Build unit tests |
 | `BUILD_EXAMPLES` | OFF | Build examples |
 | `BUILD_WITH_SANITIZERS` | OFF | Enable ASan + UBSan |
-| `USE_OPENSSL` | ON | Use OpenSSL for TLS |
-| `USE_MBEDTLS` | OFF | Use mbedTLS for TLS |
+| `TLS_BACKEND` | openssl | TLS backend: `openssl` or `mbedtls` |
 | `INSPECT_DISABLE` | OFF | Disable inspect module |
 
 ## Code Conventions

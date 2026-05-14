@@ -6,7 +6,7 @@
 #include "xtils/logging/logger.h"
 #include "xtils/net/http_common.h"
 #include "xtils/net/transport/plain_tcp_transport.h"
-#include "xtils/net/transport/tls_transport.h"
+#include "xtils/net/transport/tls_factory.h"
 #include "xtils/utils/string_utils.h"
 
 namespace xtils {
@@ -721,7 +721,7 @@ bool HttpClient::ConnectToHost(const HttpUrl& url) {
   state_ = State::kConnecting;
 
   if (url.IsHttps()) {
-    transport_ = std::make_unique<TlsTransport>(task_runner_, this);
+    transport_ = CreateTlsTransport(task_runner_, this);
   } else {  // default to plain TCP
     transport_ = std::make_unique<PlainTcpTransport>(task_runner_, this);
   }
@@ -731,7 +731,7 @@ bool HttpClient::ConnectToHost(const HttpUrl& url) {
   } else if (!ssl_cert_path_.empty()) {
     cfg.cert_file = ssl_cert_path_;
   }
-  auto tls = OpenSslContext::Create(cfg);
+  auto tls = CreateTlsContext(cfg);
   return transport_->Connect(url, tls);
 }
 

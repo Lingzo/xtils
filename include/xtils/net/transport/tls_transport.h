@@ -1,4 +1,6 @@
 #pragma once
+#ifdef USE_OPENSSL
+
 #include <openssl/ssl.h>
 
 #include <atomic>
@@ -88,3 +90,5 @@ class TlsTransport final : public Transport, public TcpClientEventListener {
 };
 
 }  // namespace xtils
+
+#endif  // USE_OPENSSL

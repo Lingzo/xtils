@@ -7,7 +7,7 @@
 #include "xtils/logging/logger.h"
 #include "xtils/net/http_common.h"
 #include "xtils/net/transport/plain_tcp_transport.h"
-#include "xtils/net/transport/tls_transport.h"
+#include "xtils/net/transport/tls_factory.h"
 #include "xtils/net/websocket_common.h"
 
 namespace xtils {
@@ -114,7 +114,7 @@ bool WebSocketClient::Connect(const std::string& url,
 
   SetState(State::kConnecting);
   if (parsed_url.IsHttps()) {
-    transport_ = std::make_unique<TlsTransport>(task_runner_, this);
+    transport_ = CreateTlsTransport(task_runner_, this);
   } else {
     transport_ = std::make_unique<PlainTcpTransport>(task_runner_, this);
   }
@@ -124,7 +124,7 @@ bool WebSocketClient::Connect(const std::string& url,
   } else if (!ssl_cert_path_.empty()) {
     cfg.cert_file = ssl_cert_path_;
   }
-  ctx_ = OpenSslContext::Create(cfg);
+  ctx_ = CreateTlsContext(cfg);
   // Connect to server
   if (!transport_->Connect(parsed_url, ctx_)) {
     HandleError("Failed to initiate TCP connection");
